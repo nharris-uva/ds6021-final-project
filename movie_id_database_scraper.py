@@ -35,7 +35,7 @@ def get_page_of_movies(page):
 
 def resume_scraping(path_to_cached_df, max_page):
     cached_movies = pd.read_csv(path_to_cached_df, index_col=0)
-    for page in range(int(cached_movies["page"].values[-1]),500):
+    for page in range(int(cached_movies["page"].values[-1]), max_page):
         temp_df = get_page_of_movies(page)
         if isinstance(temp_df, pd.DataFrame):
             cached_movies = pd.concat([cached_movies, temp_df])
