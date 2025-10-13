@@ -1,0 +1,27 @@
+id                        int64
+adult                      bool
+backdrop_path            object
+genre_ids                object
+original_language        object
+original_title           object
+overview                 object
+popularity              float64
+poster_path              object
+release_date             object
+title                    object
+video                      bool
+vote_average            float64
+vote_count                int64
+page                      int64
+budget                  float64
+genres                   object <- needs to be interpreted as a list bc its default interpreted as a string....
+homepage                 object
+imdb_id                  object
+origin_country           object
+production_companies     object
+production_countries     object
+revenue                 float64
+runtime                 float64
+spoken_languages         object
+status                   object
+tagline                  object

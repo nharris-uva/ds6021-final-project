@@ -2,6 +2,8 @@ import pandas as pd
 import plotly.express as px
 from pprint import pprint
 from ast import literal_eval
+import json
+import numpy as np
 
 needs_joining = False
 if needs_joining:
@@ -19,40 +21,52 @@ if needs_joining:
 else:
     completed_df = pd.read_csv("data/completed_movie_database.csv")
 
-graph = False
+generate_genre_table = False
+if generate_genre_table:
+    completed_df["genre_ids"] = completed_df["genre_ids"].apply(literal_eval)
+    genre_df = completed_df[["id", "genre_ids"]]
+    genre_df = genre_df.explode("genre_ids")
+    with open("genres.json", "r") as f:
+        genre_list = pd.json_normalize(json.load(f), record_path="genres")
+
+    genre_df = pd.merge(left=genre_df, right=genre_list, how="left", left_on="genre_ids", right_on="id", suffixes=("","_gl"))
+    percent_na = (genre_df["name"].isna().sum()/len(genre_df["name"]))
+    print(f"Percent NA values: {percent_na}")
+    genre_df = genre_df[["id", "genre_ids", "name"]]
+    genre_df.to_csv("data/movie_genre_database.csv")
+else:
+    genre_df = pd.read_csv("data/movie_genre_database.csv", index_col=0)
+
+
+
+graph = True
 if graph:
+    #Popularity (log x) vs vote average
     g1 = px.scatter(completed_df, x="popularity", y="vote_average",log_x=True, size="vote_count", hover_data="title")
     g1.show()
+    #Vote count vs vote average
     g2 = px.scatter(completed_df, x="vote_count", y="vote_average", hover_data="title")
     g2.show()
+    #Vote average histogram
     g3 = px.histogram(completed_df, x="vote_average")
     g3.show()
-
-# completed_df["genre_ids"] = completed_df["genre_ids"].apply(literal_eval)
-# temp = list(set(completed_df["genre_ids"].sum()))
-# temp.sort()
-# pprint(temp)
-# # temp = list(original_set)
-# # temp.sort()
-# # pprint(temp)
-
-import requests
-import dotenv
-import os
-import time
-
-#Setup for scraping
-dotenv.load_dotenv()
-api_key = os.getenv('tmdb_read_key')
-url = f"https://api.themoviedb.org/3/genre/movie/list"
-
-headers = {
-    "accept": "application/json",
-    "Authorization": f"Bearer {api_key}",
-}
-
-params = {"language": "en-US"}
-
-response = requests.get(url, headers=headers, params=params)
-
-print(response.text)
+    #Name vs Count
+    g4 = px.bar(genre_df, x="name")
+    g4.show()
+    #Avg Rating by Genre:
+    genre_df=pd.merge(completed_df[["id", "vote_average"]], genre_df, how="right", on="id")
+    rating_table = pd.DataFrame(genre_df.groupby("name", as_index=False)["vote_average"].mean(), columns=["name", "vote_average"])
+    rating_table = rating_table.iloc[2:]
+    g5 = px.bar(rating_table, x="name", y="vote_average")
+    g5.show()
+    #Violin Plots by genre:
+    g6 = px.violin(genre_df, y="vote_average", color="name")
+    g6.show()
+    #Revenue vs budget:
+    g7 = px.scatter(completed_df, x="revenue", y="budget")
+    g7.show()
+    #profit vs ratings:
+    completed_df["profit"] = completed_df["revenue"] - completed_df["budget"]
+    g8 = px.scatter(completed_df, x="profit", y="vote_average", hover_name="title", color="status")
+    g8.show()
+    
