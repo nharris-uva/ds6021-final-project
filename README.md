@@ -5,7 +5,11 @@ Data:
 
 movie id scraper: Done
 
-movie detail scraper: working on it
+movie detail scraper: Done
+
+IMDB scraping: Working on it
+
+Data Cleaning/Table Splitting: Done
 
 Models:
 
