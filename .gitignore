@@ -3,3 +3,4 @@ data/imdb_large_files/*
 data/imdb_large_files/reduced_principals.csv
 data/reduced_principals.csv
 movie_details_15_to_19.csv
+.DS_store
