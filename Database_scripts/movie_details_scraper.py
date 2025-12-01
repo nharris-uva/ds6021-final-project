@@ -4,13 +4,14 @@ import requests
 import dotenv
 import os
 import time
+from tqdm import tqdm
 
 #Setup for scraping
 dotenv.load_dotenv()
 api_key = os.getenv('tmdb_read_key')
 
 #load Movie id database
-id_df = pd.read_csv("data/movie_id_database.csv")
+id_df = pd.read_csv("data/movies_15_to_19_enriched.csv")
 scrapped_id_list = id_df["id"].values
 
 def get_movie_info(id):
@@ -32,15 +33,9 @@ def get_movie_info(id):
     else:
         return None
 
-
-# def add_details_to_df(id_list):
-#     detail_list = map(get_movie_info, id_list)
-#     filtered_list = list(filter(lambda x: isinstance(x, pd.DataFrame), detail_list))
-#     return pd.concat(filtered_list)
-
 def add_details_to_df(id_list):
-    detail_list = [get_movie_info(x) for x in id_list]
+    detail_list = [get_movie_info(x) for x in tqdm(id_list, desc="Fetching movie details")]
     return pd.concat(detail_list)
 
 new_data = add_details_to_df(scrapped_id_list)
-new_data.to_csv("data/movie_details_database.csv")
+new_data.to_csv("data/redux_movie_details_database.csv")
