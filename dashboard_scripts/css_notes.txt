@@ -1,0 +1,2 @@
+Example glass gel slider: https://freefrontend.com/css-glassmorphism/
+Neumorphic Components: https://codepen.io/caesura/pen/QWNjvOX
