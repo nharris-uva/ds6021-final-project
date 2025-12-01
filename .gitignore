@@ -2,4 +2,4 @@
 data/imdb_large_files/*
 data/imdb_large_files/reduced_principals.csv
 data/reduced_principals.csv
-move_details_15_to_19.csv
+movie_details_15_to_19.csv
