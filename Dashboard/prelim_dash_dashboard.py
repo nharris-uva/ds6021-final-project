@@ -11,10 +11,10 @@ BOOTSTRAP_CSS = "https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap
 GOOGLE_FONTS = "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap"
 
 # Load data
-raw_data = pd.read_csv("data/all_movie_features_15_to_19.csv").drop(columns=["Unnamed: 0"]).head(1000)
+raw_data = pd.read_csv("data/all_movie_features_15_to_19.csv").drop(columns=["Unnamed: 0"])
 
 metadata = raw_data[["id", "title", "adult", "backdrop_path", "poster_path", "imdb_id", "overview", "tagline", "video"]]
-original_data = raw_data.drop(columns=["adult", "backdrop_path", "poster_path", "imdb_id", "overview", "tagline", "title", "video", "homepage", "production_companies", "production_countries", "status", "spoken_languages"] + [col for col in raw_data.columns if "belongs_to_collection" in col], axis=1)
+original_data = raw_data.drop(columns=["adult", "backdrop_path", "poster_path", "imdb_id", "overview", "tagline", "title", "original_title", "video", "homepage", "production_companies", "production_countries", "status", "spoken_languages"] + [col for col in raw_data.columns if "belongs_to_collection" in col], axis=1)
 transformed_data = original_data.copy()
 
 # Initialize the Dash app with external stylesheets
@@ -44,6 +44,13 @@ app.index_string = '''
                 --white300: hsla(0, 0%, 100%, 0.3);
                 --white500: hsla(0, 0%, 100%, 0.5);
                 --white: hsl(0, 0%, 100%);
+                /* Theme-aware card header colors */
+                --card-header-bg-light: #f5f5f7;
+                --card-header-text-light: #1f2937;
+                --card-header-border-light: #e5e7eb;
+                --card-header-bg-dark: #0f172a;
+                --card-header-text-dark: #e5e7eb;
+                --card-header-border-dark: #1f2937;
             }
 
             .glass-card {
@@ -92,13 +99,15 @@ app.index_string = '''
             }
 
             .glass-card .card-header {
-                background: transparent !important;
-                color: #333333 !important;
+                background: var(--card-header-bg-light) !important;
+                color: var(--card-header-text-light) !important;
                 font-weight: 600 !important;
                 position: relative !important;
                 z-index: 2 !important;
-                border: none !important;
-                border-bottom: 1px solid #ffffff40 !important;
+                border-top-left-radius: 1em !important;
+                border-top-right-radius: 1em !important;
+                border-bottom: 1px solid var(--card-header-border-light) !important;
+                padding: 0.75rem 1rem !important;
             }
 
             .glass-card .card-body {
@@ -142,14 +151,24 @@ app.index_string = '''
 '''
 
 # Plotly visual style
-px.defaults.template = "plotly_white"
-DEFAULT_FIG_MARGIN = dict(l=10, r=10, t=50, b=10)
+px.defaults.template = "plotly_dark"
+DEFAULT_FIG_MARGIN = dict(l=10, r=10, t=80, b=20)
 
 # Dictionary to store transformation notes for each column
 TRANSFORMATION_NOTES = {
     # Add your transformation notes here
     # Example: "budget": "Applied log transformation to reduce skewness\nReplaced 0 values with NaN"
 }
+
+def truncate_label(label, max_len=24):
+    """Truncate a string label to a maximum length with ellipsis."""
+    try:
+        s = str(label)
+    except Exception:
+        s = label
+    if len(s) <= max_len:
+        return s
+    return s[: max_len - 1] + "…"
 
 def get_column_type(df, col):
     """Determine if column is numeric or categorical"""
@@ -163,32 +182,53 @@ def create_numeric_graph(df, col, title_prefix=""):
     """Create histogram with box plot for numeric columns"""
     fig = px.histogram(df, x=col, marginal="box", opacity=0.9)
     fig.update_layout(
-        title_text=f'{title_prefix}{col}',
-        height=300,
+        title_text=None,
+        height=420,
         margin=DEFAULT_FIG_MARGIN,
-        title_font=dict(size=16, family="Inter, system-ui"),
-        showlegend=False
+        showlegend=False,
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(color="#222222", size=14),
+        xaxis=dict(title_font=dict(color="#222222", size=16), tickfont=dict(color="#222222", size=12), automargin=True),
+        yaxis=dict(title_font=dict(color="#222222", size=16), tickfont=dict(color="#222222", size=12), automargin=True)
     )
     return fig
 
 def create_categorical_graph(df, col, title_prefix=""):
     """Create bar chart for categorical columns showing top 15 most frequent occurrences"""
     value_counts = df[col].value_counts().head(15)
+    original_labels = list(value_counts.index)
+    x_labels = [truncate_label(lbl, max_len=24) for lbl in original_labels]
     fig = px.bar(
-        x=value_counts.index, 
+        x=x_labels,
         y=value_counts.values,
         text_auto=True,
         opacity=0.95
     )
+    # Keep bar labels inside to avoid clipping at the top
+    fig.update_traces(
+        textposition='inside',
+        insidetextanchor='end',
+        textfont=dict(size=12, color='#ffffff')
+    )
+    fig.update_traces(
+        hovertext=original_labels,
+        hovertemplate="%{hovertext}: %{y}<extra></extra>"
+    )
     fig.update_layout(
-        title_text=f'{title_prefix}{col} (Top 15)',
+        title_text=None,
         xaxis_title=col,
         yaxis_title='Count',
-        height=300,
+        height=420,
         margin=DEFAULT_FIG_MARGIN,
-        title_font=dict(size=16, family="Inter, system-ui"),
-        showlegend=False
+        showlegend=False,
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(color="#222222", size=14),
+        xaxis=dict(title_font=dict(color="#222222", size=16), tickfont=dict(color="#222222", size=12), automargin=True),
+        yaxis=dict(title_font=dict(color="#222222", size=16), tickfont=dict(color="#222222", size=12), automargin=True)
     )
+    fig.update_xaxes(tickangle=-30)
     return fig
 
 def create_text_placeholder(col):
@@ -198,13 +238,14 @@ def create_text_placeholder(col):
         text=f"Column '{col}' has too many unique values to visualize",
         xref="paper", yref="paper",
         x=0.5, y=0.5, showarrow=False,
-        font=dict(size=14, family="Inter, system-ui")
+        font=dict(size=14, family="Inter, system-ui", color="#222222")
     )
     fig.update_layout(
-        height=300,
+        height=420,
         margin=DEFAULT_FIG_MARGIN,
         xaxis=dict(visible=False),
-        yaxis=dict(visible=False)
+        yaxis=dict(visible=False),
+        font=dict(color="#222222", size=14)
     )
     return fig
 
@@ -218,11 +259,11 @@ def build_column_row(col):
     
     # Create appropriate visualizations based on column type
     if col_type == 'numeric':
-        left_graph = create_numeric_graph(original_data, col, "Original: ")
-        right_graph = create_numeric_graph(transformed_data, col, "Transformed: ")
+        left_graph = create_numeric_graph(original_data, col)
+        right_graph = create_numeric_graph(transformed_data, col)
     else:  # categorical
-        left_graph = create_categorical_graph(original_data, col, "Original: ")
-        right_graph = create_categorical_graph(transformed_data, col, "Transformed: ")
+        left_graph = create_categorical_graph(original_data, col)
+        right_graph = create_categorical_graph(transformed_data, col)
     
     # Get transformation notes if available
     notes = TRANSFORMATION_NOTES.get(col, f"No transformation notes yet for **{col}**.\n\nAdd your transformation explanation here.")
@@ -231,7 +272,7 @@ def build_column_row(col):
         # Left card - Original data
         html.Div([
             html.Div([
-                html.Div("Original", className="card-header fw-semibold text-primary"),
+                html.Div(f"Original: {col}", className="card-header fw-semibold"),
                 html.Div(
                     dcc.Graph(
                         figure=left_graph,
@@ -239,7 +280,7 @@ def build_column_row(col):
                     ),
                     className="card-body p-2"
                 )
-            ], className="card shadow-sm border-0 h-100")
+            ], className="card glass-card shadow-lg h-100")
         ], className="col-12 col-lg-4 mb-3"),
         
         # Middle card - Transformation notes with glassmorphism
@@ -265,7 +306,7 @@ def build_column_row(col):
         # Right card - Transformed data
         html.Div([
             html.Div([
-                html.Div("Transformed", className="card-header fw-semibold text-success"),
+                html.Div(f"Transformed: {col}", className="card-header fw-semibold"),
                 html.Div(
                     dcc.Graph(
                         figure=right_graph,
@@ -273,7 +314,7 @@ def build_column_row(col):
                     ),
                     className="card-body p-2"
                 )
-            ], className="card shadow-sm border-0 h-100")
+            ], className="card glass-card shadow-lg h-100")
         ], className="col-12 col-lg-4 mb-3")
     ], className="row g-3 align-items-stretch mb-3")
     
@@ -307,20 +348,24 @@ app.layout = html.Div([
             )
         ], className="col")
     ], className="row mb-3"),
-    # Header
+    # Top header card
     html.Div([
         html.Div([
-            html.H1(
-                "Data Transformation Dashboard",
-                className="h2 fw-bold mb-2",
-                style={'fontFamily': 'Inter, system-ui', 'color': '#ffffff'}
-            ),
-            html.P(
-                "Compare original vs transformed features and document your transformation steps.",
-                className="mb-0 lead",
-                style={'color': '#ffffffcc'}
-            )
-        ], className="col")
+            html.Div([
+                html.Div("Data Transformation Dashboard", className="card-header fw-semibold"),
+                html.Div([
+                    html.P(
+                        "Compare original vs transformed features and document your transformation steps.",
+                        className="mb-0",
+                        style={
+                            'fontFamily': 'Inter, system-ui',
+                            'fontSize': '16px',
+                            'color': '#333333'
+                        }
+                    )
+                ], className="card-body")
+            ], className="card glass-card shadow-lg")
+        ], className="col-12")
     ], className="row mb-4"),
     
     # Column headers
@@ -367,7 +412,8 @@ app.layout = html.Div([
 def update_theme(theme):
     if theme == 'dark':
         background = (
-            'linear-gradient(135deg, hsl(223, 90%, 10%), hsl(223, 90%, 6%))'
+            'radial-gradient(1600px 1200px at 50% 30%, hsla(223, 90%, 18%, 0.35), hsla(223, 90%, 8%, 0.6) 60%), '
+            'linear-gradient(135deg, hsla(223, 90%, 12%, 0.8), hsla(223, 90%, 6%, 0.9))'
         )
         header_styles = [
             {'color': '#60a5fa'},
@@ -376,12 +422,12 @@ def update_theme(theme):
         ]
     else:
         background = (
-            'linear-gradient(#444cf7 1px, transparent 1px), '
-            'linear-gradient(to right, #444cf7 1px, transparent 1px), '
-            'radial-gradient(1200px 800px at 20% 20%, #e6d5a8, #e6d5a800 60%), '
-            'radial-gradient(1000px 700px at 80% 30%, #a8d5f0, #a8d5f000 55%), '
-            'radial-gradient(900px 900px at 50% 80%, #ffe8a3, #ffe8a300 50%), '
-            'linear-gradient(135deg, #f2ede0, #faf5e8)'
+            'linear-gradient(#444cf722 1px, transparent 1px), '
+            'linear-gradient(to right, #444cf722 1px, transparent 1px), '
+            'radial-gradient(1400px 1000px at 25% 25%, rgba(230, 213, 168, 0.35), rgba(230, 213, 168, 0) 65%), '
+            'radial-gradient(1200px 900px at 80% 30%, rgba(168, 213, 240, 0.30), rgba(168, 213, 240, 0) 60%), '
+            'radial-gradient(1100px 1100px at 50% 80%, rgba(255, 232, 163, 0.28), rgba(255, 232, 163, 0) 55%), '
+            'linear-gradient(135deg, #f7f4ea, #fbf7ef)'
         )
         header_styles = [
             {'color': '#1a4d8f'},
@@ -391,7 +437,7 @@ def update_theme(theme):
 
     container_style = {
         'background': background,
-        'backgroundSize': '35px 35px, 35px 35px, auto, auto, auto, auto',
+        'backgroundSize': '50px 50px, 50px 50px, auto, auto, auto, auto',
         'minHeight': '100vh',
         'fontFamily': 'Inter, system-ui'
     }
