@@ -1,3 +1,4 @@
+
 import pandas as pd
 import dash
 from dash import dcc, html
@@ -6,149 +7,65 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 
+def hex_to_rgba(hex_color, alpha):
+    hex_color = hex_color.lstrip('#')
+    lv = len(hex_color)
+    if lv == 3:
+        hex_color = ''.join([c*2 for c in hex_color])
+    r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    return f'rgba({r}, {g}, {b}, {alpha})'
+
+COLORS = {
+    # Colors derived from dashboard background gradients
+    'yellow_bg': '#e6d5a8',
+    'blue_bg': '#a8d5f0',
+    'gold_bg': '#ffe8a3',
+    'header_original': '#1a4d8f',
+    'header_notes': '#8b6f00',
+    'header_transformed': '#156647',
+    'header_text': '#333333',
+    'body_text': '#333333',
+    'body_strong': '#1a1a1a',
+    'body_secondary': '#444444',
+    'plot_font': '#222222',
+    'plot_bg': 'rgba(0,0,0,0)',
+    'plot_bar_text': '#ffffff',
+    'dashboard_bg': 'linear-gradient(#444cf722 1px, transparent 1px), linear-gradient(to right, #444cf722 1px, transparent 1px), radial-gradient(1400px 1000px at 25% 25%, {yellow_bg_alpha}, rgba(230, 213, 168, 0) 65%), radial-gradient(1200px 900px at 80% 30%, {blue_bg_alpha}, rgba(168, 213, 240, 0) 60%), radial-gradient(1100px 1100px at 50% 80%, {gold_bg_alpha}, rgba(255, 232, 163, 0) 55%), linear-gradient(135deg, #f7f4ea, #fbf7ef)',
+    'dashboard_border': '2px solid #eee',
+}
+
 # Modern stylesheet (Bootstrap 5)
 BOOTSTRAP_CSS = "https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
 GOOGLE_FONTS = "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap"
 
 # Load data
-raw_data = pd.read_csv("data/all_movie_features_15_to_19.csv").drop(columns=["Unnamed: 0"])
+raw_data = pd.read_csv("data/all_movie_features_15_to_19.csv").drop(columns=["Unnamed: 0"]).head(1000)
 
 metadata = raw_data[["id", "title", "adult", "backdrop_path", "poster_path", "imdb_id", "overview", "tagline", "video"]]
 original_data = raw_data.drop(columns=["adult", "backdrop_path", "poster_path", "imdb_id", "overview", "tagline", "title", "original_title", "video", "homepage", "production_companies", "production_countries", "status", "spoken_languages"] + [col for col in raw_data.columns if "belongs_to_collection" in col], axis=1)
 transformed_data = original_data.copy()
 
+#Transformations:
+#Transform budget
+transformed_data['budget'] = transformed_data['budget'].replace(0, np.nan)
+transformed_data['budget'] = np.log1p(transformed_data['budget'])
+#Transform revenue
+transformed_data['revenue'] = transformed_data['revenue'].replace(0, np.nan)
+transformed_data['revenue'] = np.log1p(transformed_data['revenue'])
+#Transform runtime
+transformed_data['runtime'] = transformed_data['runtime'].replace(0, np.nan)
+#Transform release_date
+transformed_data['release_date'] = pd.to_datetime(transformed_data['release_date'], errors='coerce')
+#transform vote_count
+transformed_data['vote_count'] = transformed_data['vote_count'].replace(0, np.nan)
+transformed_data['vote_count'] = np.log1p(transformed_data['vote_count'])
+
+#transform vote_average
+transformed_data['vote_average'] = transformed_data['vote_average'].replace(0, np.nan)
+
 # Initialize the Dash app with external stylesheets
 app = dash.Dash(__name__, external_stylesheets=[BOOTSTRAP_CSS, GOOGLE_FONTS])
 
-# Inject custom CSS
-app.index_string = '''
-<!DOCTYPE html>
-<html>
-    <head>
-        {%metas%}
-        <title>{%title%}</title>
-        {%favicon%}
-        {%css%}
-        <style>
-            :root {
-                --hue-primary: 223;
-                --hue-secondary: 178;
-                --primary500: hsl(var(--hue-primary), 90%, 50%);
-                --primary600: hsl(var(--hue-primary), 90%, 60%);
-                --primary700: hsl(var(--hue-primary), 90%, 70%);
-                --secondary800: hsl(var(--hue-secondary), 90%, 80%);
-                --white0: hsla(0, 0%, 100%, 0);
-                --white50: hsla(0, 0%, 100%, 0.05);
-                --white100: hsla(0, 0%, 100%, 0.1);
-                --white200: hsla(0, 0%, 100%, 0.2);
-                --white300: hsla(0, 0%, 100%, 0.3);
-                --white500: hsla(0, 0%, 100%, 0.5);
-                --white: hsl(0, 0%, 100%);
-                /* Theme-aware card header colors */
-                --card-header-bg-light: #f5f5f7;
-                --card-header-text-light: #1f2937;
-                --card-header-border-light: #e5e7eb;
-                --card-header-bg-dark: #0f172a;
-                --card-header-text-dark: #e5e7eb;
-                --card-header-border-dark: #1f2937;
-            }
-
-            .glass-card {
-                backdrop-filter: blur(12px) !important;
-                -webkit-backdrop-filter: blur(12px) !important;
-                background: #ffffff1a !important;
-                border: 1px solid #ffffff40 !important;
-                border-radius: 1em !important;
-                position: relative !important;
-                overflow: visible !important;
-                box-shadow: 0 8px 32px 0 #00000020 !important;
-            }
-
-            .glass-card::before {
-                content: "" !important;
-                position: absolute !important;
-                top: 0 !important;
-                left: 0 !important;
-                right: 0 !important;
-                bottom: 0 !important;
-                border-radius: 1em !important;
-                padding: 1px !important;
-                background: linear-gradient(135deg, #ffffff80, #ffffff00) !important;
-                -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0) !important;
-                -webkit-mask-composite: xor !important;
-                mask-composite: exclude !important;
-                pointer-events: none !important;
-                z-index: 0 !important;
-            }
-
-            .glass-card::after {
-                content: "" !important;
-                position: absolute !important;
-                top: 0 !important;
-                left: 0 !important;
-                right: 0 !important;
-                bottom: 0 !important;
-                border-radius: 1em !important;
-                padding: 1px !important;
-                background: linear-gradient(135deg, #ffffff00, #ffffff40) !important;
-                -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0) !important;
-                -webkit-mask-composite: xor !important;
-                mask-composite: exclude !important;
-                pointer-events: none !important;
-                z-index: 0 !important;
-            }
-
-            .glass-card .card-header {
-                background: var(--card-header-bg-light) !important;
-                color: var(--card-header-text-light) !important;
-                font-weight: 600 !important;
-                position: relative !important;
-                z-index: 2 !important;
-                border-top-left-radius: 1em !important;
-                border-top-right-radius: 1em !important;
-                border-bottom: 1px solid var(--card-header-border-light) !important;
-                padding: 0.75rem 1rem !important;
-            }
-
-            .glass-card .card-body {
-                position: relative !important;
-                z-index: 2 !important;
-                color: #333333 !important;
-                background: transparent !important;
-            }
-
-            .glass-card .card-body * {
-                color: #333333 !important;
-            }
-
-            .glass-card .card-body h1,
-            .glass-card .card-body h2,
-            .glass-card .card-body h3,
-            .glass-card .card-body h4,
-            .glass-card .card-body h5,
-            .glass-card .card-body h6,
-            .glass-card .card-body strong,
-            .glass-card .card-body b {
-                color: #1a1a1a !important;
-                font-weight: 600 !important;
-            }
-
-            .glass-card .card-body p,
-            .glass-card .card-body li {
-                color: #444444 !important;
-            }
-        </style>
-    </head>
-    <body>
-        {%app_entry%}
-        <footer>
-            {%config%}
-            {%scripts%}
-            {%renderer%}
-        </footer>
-    </body>
-</html>
-'''
 
 # Plotly visual style
 px.defaults.template = "plotly_dark"
@@ -186,11 +103,11 @@ def create_numeric_graph(df, col, title_prefix=""):
         height=420,
         margin=DEFAULT_FIG_MARGIN,
         showlegend=False,
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(color="#222222", size=14),
-        xaxis=dict(title_font=dict(color="#222222", size=16), tickfont=dict(color="#222222", size=12), automargin=True),
-        yaxis=dict(title_font=dict(color="#222222", size=16), tickfont=dict(color="#222222", size=12), automargin=True)
+        plot_bgcolor=COLORS['plot_bg'],
+        paper_bgcolor=COLORS['plot_bg'],
+        font=dict(color=COLORS['plot_font'], size=14),
+        xaxis=dict(title_font=dict(color=COLORS['plot_font'], size=16), tickfont=dict(color=COLORS['plot_font'], size=12), automargin=True),
+        yaxis=dict(title_font=dict(color=COLORS['plot_font'], size=16), tickfont=dict(color=COLORS['plot_font'], size=12), automargin=True)
     )
     return fig
 
@@ -203,13 +120,13 @@ def create_categorical_graph(df, col, title_prefix=""):
         x=x_labels,
         y=value_counts.values,
         text_auto=True,
-        opacity=0.95
+        opacity=0.95,
     )
     # Keep bar labels inside to avoid clipping at the top
     fig.update_traces(
         textposition='inside',
         insidetextanchor='end',
-        textfont=dict(size=12, color='#ffffff')
+        textfont=dict(size=12, color=COLORS['plot_bar_text'])
     )
     fig.update_traces(
         hovertext=original_labels,
@@ -222,11 +139,11 @@ def create_categorical_graph(df, col, title_prefix=""):
         height=420,
         margin=DEFAULT_FIG_MARGIN,
         showlegend=False,
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(color="#222222", size=14),
-        xaxis=dict(title_font=dict(color="#222222", size=16), tickfont=dict(color="#222222", size=12), automargin=True),
-        yaxis=dict(title_font=dict(color="#222222", size=16), tickfont=dict(color="#222222", size=12), automargin=True)
+        plot_bgcolor=COLORS['plot_bg'],
+        paper_bgcolor=COLORS['plot_bg'],
+        font=dict(color=COLORS['plot_font'], size=14),
+        xaxis=dict(title_font=dict(color=COLORS['plot_font'], size=16), tickfont=dict(color=COLORS['plot_font'], size=12), automargin=True),
+        yaxis=dict(title_font=dict(color=COLORS['plot_font'], size=16), tickfont=dict(color=COLORS['plot_font'], size=12), automargin=True)
     )
     fig.update_xaxes(tickangle=-30)
     return fig
@@ -238,14 +155,14 @@ def create_text_placeholder(col):
         text=f"Column '{col}' has too many unique values to visualize",
         xref="paper", yref="paper",
         x=0.5, y=0.5, showarrow=False,
-        font=dict(size=14, family="Inter, system-ui", color="#222222")
+        font=dict(size=14, family="Inter, system-ui", color=COLORS['plot_font'])
     )
     fig.update_layout(
         height=420,
         margin=DEFAULT_FIG_MARGIN,
         xaxis=dict(visible=False),
         yaxis=dict(visible=False),
-        font=dict(color="#222222", size=14)
+        font=dict(color=COLORS['plot_font'], size=14)
     )
     return fig
 
@@ -329,25 +246,15 @@ def build_dashboard_layout():
             rows.append(row)
     return rows
 
-# Create the app layout
+
+# Create the app layout (light mode only, no theme toggle)
+dashboard_bg = COLORS['dashboard_bg'].format(
+    yellow_bg_alpha=hex_to_rgba(COLORS['yellow_bg'], 0.35),
+    blue_bg_alpha=hex_to_rgba(COLORS['blue_bg'], 0.30),
+    gold_bg_alpha=hex_to_rgba(COLORS['gold_bg'], 0.28)
+)
+
 app.layout = html.Div([
-    # Theme toggle controls
-    html.Div([
-        html.Div([
-            html.Label("Theme", className="fw-semibold me-3", style={'color': '#ffffffe6'}),
-            dcc.RadioItems(
-                id='theme-toggle',
-                options=[
-                    {'label': 'Light', 'value': 'light'},
-                    {'label': 'Dark', 'value': 'dark'}
-                ],
-                value='light',
-                inline=True,
-                inputStyle={'marginRight': '6px'},
-                labelStyle={'marginRight': '14px', 'color': '#ffffffe6'}
-            )
-        ], className="col")
-    ], className="row mb-3"),
     # Top header card
     html.Div([
         html.Div([
@@ -360,88 +267,48 @@ app.layout = html.Div([
                         style={
                             'fontFamily': 'Inter, system-ui',
                             'fontSize': '16px',
-                            'color': '#333333'
+                            'color': COLORS['header_text']
                         }
                     )
                 ], className="card-body")
             ], className="card glass-card shadow-lg")
         ], className="col-12")
     ], className="row mb-4"),
-    
+
     # Column headers
     html.Div([
         html.Div([
             html.Div(
                 "Original Data",
                 className="text-center fw-bold fs-5",
-                id={'type': 'header-color', 'index': 0},
-                style={'fontFamily': 'Inter, system-ui', 'color': '#60a5fa'}
+                style={'fontFamily': 'Inter, system-ui', 'color': COLORS['header_original']}
             )
         ], className="col-12 col-lg-4"),
         html.Div([
             html.Div(
                 "Transformation Notes",
                 className="text-center fw-bold fs-5",
-                id={'type': 'header-color', 'index': 1},
-                style={'fontFamily': 'Inter, system-ui', 'color': '#fbbf24'}
+                style={'fontFamily': 'Inter, system-ui', 'color': COLORS['header_notes']}
             )
         ], className="col-12 col-lg-4"),
         html.Div([
             html.Div(
                 "Transformed Data",
                 className="text-center fw-bold fs-5",
-                id={'type': 'header-color', 'index': 2},
-                style={'fontFamily': 'Inter, system-ui', 'color': '#34d399'}
+                style={'fontFamily': 'Inter, system-ui', 'color': COLORS['header_transformed']}
             )
         ], className="col-12 col-lg-4")
-    ], className="row g-3 mb-3 pb-2", style={'borderBottom': '2px solid #ffffff33'}),
-    
+    ], className="row g-3 mb-3 pb-2", style={'borderBottom': COLORS['dashboard_border']}),
+
     # All column rows
     html.Div(build_dashboard_layout(), className="dashboard-rows")
-    
-], id='app-container', className="container-fluid py-4 px-3")
+], id='app-container', className="container-fluid py-4 px-3", style={
+    'background': dashboard_bg,
+    'backgroundSize': '50px 50px, 50px 50px, auto, auto, auto, auto',
+    'minHeight': '100vh',
+    'fontFamily': 'Inter, system-ui'
+})
 
-# Theme callback
-@app.callback(
-    Output('app-container', 'style'),
-    Output({'type': 'header-color', 'index': 0}, 'style'),
-    Output({'type': 'header-color', 'index': 1}, 'style'),
-    Output({'type': 'header-color', 'index': 2}, 'style'),
-    Input('theme-toggle', 'value')
-)
-def update_theme(theme):
-    if theme == 'dark':
-        background = (
-            'radial-gradient(1600px 1200px at 50% 30%, hsla(223, 90%, 18%, 0.35), hsla(223, 90%, 8%, 0.6) 60%), '
-            'linear-gradient(135deg, hsla(223, 90%, 12%, 0.8), hsla(223, 90%, 6%, 0.9))'
-        )
-        header_styles = [
-            {'color': '#60a5fa'},
-            {'color': '#fbbf24'},
-            {'color': '#34d399'}
-        ]
-    else:
-        background = (
-            'linear-gradient(#444cf722 1px, transparent 1px), '
-            'linear-gradient(to right, #444cf722 1px, transparent 1px), '
-            'radial-gradient(1400px 1000px at 25% 25%, rgba(230, 213, 168, 0.35), rgba(230, 213, 168, 0) 65%), '
-            'radial-gradient(1200px 900px at 80% 30%, rgba(168, 213, 240, 0.30), rgba(168, 213, 240, 0) 60%), '
-            'radial-gradient(1100px 1100px at 50% 80%, rgba(255, 232, 163, 0.28), rgba(255, 232, 163, 0) 55%), '
-            'linear-gradient(135deg, #f7f4ea, #fbf7ef)'
-        )
-        header_styles = [
-            {'color': '#1a4d8f'},
-            {'color': '#8b6f00'},
-            {'color': '#156647'}
-        ]
-
-    container_style = {
-        'background': background,
-        'backgroundSize': '50px 50px, 50px 50px, auto, auto, auto, auto',
-        'minHeight': '100vh',
-        'fontFamily': 'Inter, system-ui'
-    }
-    return container_style, header_styles[0], header_styles[1], header_styles[2]
 
 if __name__ == '__main__':
     app.run(debug=True, port=8050, host='127.0.0.1')
