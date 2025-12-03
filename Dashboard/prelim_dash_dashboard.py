@@ -7,31 +7,28 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 
-def hex_to_rgba(hex_color, alpha):
-    hex_color = hex_color.lstrip('#')
-    lv = len(hex_color)
-    if lv == 3:
-        hex_color = ''.join([c*2 for c in hex_color])
-    r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-    return f'rgba({r}, {g}, {b}, {alpha})'
-
 COLORS = {
-    # Colors derived from dashboard background gradients
-    'yellow_bg': '#e6d5a8',
-    'blue_bg': '#a8d5f0',
-    'gold_bg': '#ffe8a3',
-    'header_original': '#1a4d8f',
-    'header_notes': '#8b6f00',
-    'header_transformed': '#156647',
-    'header_text': '#333333',
-    'body_text': '#333333',
-    'body_strong': '#1a1a1a',
-    'body_secondary': '#444444',
-    'plot_font': '#222222',
-    'plot_bg': 'rgba(0,0,0,0)',
-    'plot_bar_text': '#ffffff',
-    'dashboard_bg': 'linear-gradient(#444cf722 1px, transparent 1px), linear-gradient(to right, #444cf722 1px, transparent 1px), radial-gradient(1400px 1000px at 25% 25%, {yellow_bg_alpha}, rgba(230, 213, 168, 0) 65%), radial-gradient(1200px 900px at 80% 30%, {blue_bg_alpha}, rgba(168, 213, 240, 0) 60%), radial-gradient(1100px 1100px at 50% 80%, {gold_bg_alpha}, rgba(255, 232, 163, 0) 55%), linear-gradient(135deg, #f7f4ea, #fbf7ef)',
-    'dashboard_border': '2px solid #eee',
+    'graph_bg': '#D9376E',
+
+    # Background
+    'bg_main': '#EFF0F3',
+    'grid_color': "#8AAAC0",
+    
+    # Header colors
+    'header_original': '#FF8E3C',
+    'header_notes': '#FF8E3C',
+    'header_transformed': '#FF8E3C',
+    
+    # Text colors
+    'text_dark': '#1a1a1a',
+    'text_primary': '#222222',
+    'text_secondary': '#333333',
+    'text_tertiary': '#444444',
+    'text_light': '#ffffff',
+    
+    # Misc
+    'bg_transparent': 'rgba(0,0,0,0)',
+    'border_light': '2px solid #eee',
 }
 
 # Modern stylesheet (Bootstrap 5)
@@ -39,7 +36,7 @@ BOOTSTRAP_CSS = "https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap
 GOOGLE_FONTS = "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap"
 
 # Load data
-raw_data = pd.read_csv("data/all_movie_features_15_to_19.csv").drop(columns=["Unnamed: 0"]).head(1000)
+raw_data = pd.read_csv("data/all_movie_features_15_to_19.csv").drop(columns=["Unnamed: 0"]).head(100)
 
 metadata = raw_data[["id", "title", "adult", "backdrop_path", "poster_path", "imdb_id", "overview", "tagline", "video"]]
 original_data = raw_data.drop(columns=["adult", "backdrop_path", "poster_path", "imdb_id", "overview", "tagline", "title", "original_title", "video", "homepage", "production_companies", "production_countries", "status", "spoken_languages"] + [col for col in raw_data.columns if "belongs_to_collection" in col], axis=1)
@@ -65,7 +62,6 @@ transformed_data['vote_average'] = transformed_data['vote_average'].replace(0, n
 
 # Initialize the Dash app with external stylesheets
 app = dash.Dash(__name__, external_stylesheets=[BOOTSTRAP_CSS, GOOGLE_FONTS])
-
 
 # Plotly visual style
 px.defaults.template = "plotly_dark"
@@ -97,17 +93,17 @@ def get_column_type(df, col):
 
 def create_numeric_graph(df, col, title_prefix=""):
     """Create histogram with box plot for numeric columns"""
-    fig = px.histogram(df, x=col, marginal="box", opacity=0.9)
+    fig = px.histogram(df, x=col, marginal="box", opacity=0.9, color_discrete_sequence=[COLORS['graph_bg']])
     fig.update_layout(
         title_text=None,
         height=420,
         margin=DEFAULT_FIG_MARGIN,
         showlegend=False,
-        plot_bgcolor=COLORS['plot_bg'],
-        paper_bgcolor=COLORS['plot_bg'],
-        font=dict(color=COLORS['plot_font'], size=14),
-        xaxis=dict(title_font=dict(color=COLORS['plot_font'], size=16), tickfont=dict(color=COLORS['plot_font'], size=12), automargin=True),
-        yaxis=dict(title_font=dict(color=COLORS['plot_font'], size=16), tickfont=dict(color=COLORS['plot_font'], size=12), automargin=True)
+        plot_bgcolor=COLORS['bg_transparent'],
+        paper_bgcolor=COLORS['bg_transparent'],
+        font=dict(color=COLORS['text_primary'], size=14),
+        xaxis=dict(title_font=dict(color=COLORS['text_primary'], size=16), tickfont=dict(color=COLORS['text_primary'], size=12), automargin=True),
+        yaxis=dict(title_font=dict(color=COLORS['text_primary'], size=16), tickfont=dict(color=COLORS['text_primary'], size=12), automargin=True)
     )
     return fig
 
@@ -121,12 +117,13 @@ def create_categorical_graph(df, col, title_prefix=""):
         y=value_counts.values,
         text_auto=True,
         opacity=0.95,
+        color_discrete_sequence=[COLORS['graph_bg']]
     )
     # Keep bar labels inside to avoid clipping at the top
     fig.update_traces(
         textposition='inside',
         insidetextanchor='end',
-        textfont=dict(size=12, color=COLORS['plot_bar_text'])
+        textfont=dict(size=12, color=COLORS['text_light'])
     )
     fig.update_traces(
         hovertext=original_labels,
@@ -139,11 +136,11 @@ def create_categorical_graph(df, col, title_prefix=""):
         height=420,
         margin=DEFAULT_FIG_MARGIN,
         showlegend=False,
-        plot_bgcolor=COLORS['plot_bg'],
-        paper_bgcolor=COLORS['plot_bg'],
-        font=dict(color=COLORS['plot_font'], size=14),
-        xaxis=dict(title_font=dict(color=COLORS['plot_font'], size=16), tickfont=dict(color=COLORS['plot_font'], size=12), automargin=True),
-        yaxis=dict(title_font=dict(color=COLORS['plot_font'], size=16), tickfont=dict(color=COLORS['plot_font'], size=12), automargin=True)
+        plot_bgcolor=COLORS['bg_transparent'],
+        paper_bgcolor=COLORS['bg_transparent'],
+        font=dict(color=COLORS['text_primary'], size=14),
+        xaxis=dict(title_font=dict(color=COLORS['text_primary'], size=16), tickfont=dict(color=COLORS['text_primary'], size=12), automargin=True),
+        yaxis=dict(title_font=dict(color=COLORS['text_primary'], size=16), tickfont=dict(color=COLORS['text_primary'], size=12), automargin=True)
     )
     fig.update_xaxes(tickangle=-30)
     return fig
@@ -155,14 +152,14 @@ def create_text_placeholder(col):
         text=f"Column '{col}' has too many unique values to visualize",
         xref="paper", yref="paper",
         x=0.5, y=0.5, showarrow=False,
-        font=dict(size=14, family="Inter, system-ui", color=COLORS['plot_font'])
+        font=dict(size=14, family="Inter, system-ui", color=COLORS['text_primary'])
     )
     fig.update_layout(
         height=420,
         margin=DEFAULT_FIG_MARGIN,
         xaxis=dict(visible=False),
         yaxis=dict(visible=False),
-        font=dict(color=COLORS['plot_font'], size=14)
+        font=dict(color=COLORS['text_primary'], size=14)
     )
     return fig
 
@@ -247,13 +244,7 @@ def build_dashboard_layout():
     return rows
 
 
-# Create the app layout (light mode only, no theme toggle)
-dashboard_bg = COLORS['dashboard_bg'].format(
-    yellow_bg_alpha=hex_to_rgba(COLORS['yellow_bg'], 0.35),
-    blue_bg_alpha=hex_to_rgba(COLORS['blue_bg'], 0.30),
-    gold_bg_alpha=hex_to_rgba(COLORS['gold_bg'], 0.28)
-)
-
+# Create the app layout
 app.layout = html.Div([
     # Top header card
     html.Div([
@@ -267,7 +258,7 @@ app.layout = html.Div([
                         style={
                             'fontFamily': 'Inter, system-ui',
                             'fontSize': '16px',
-                            'color': COLORS['header_text']
+                            'color': COLORS['text_secondary']
                         }
                     )
                 ], className="card-body")
@@ -279,32 +270,32 @@ app.layout = html.Div([
     html.Div([
         html.Div([
             html.Div(
-                "Original Data",
-                className="text-center fw-bold fs-5",
-                style={'fontFamily': 'Inter, system-ui', 'color': COLORS['header_original']}
+                "Raw Data",
+                className="text-center fw-bold",
+                style={'fontFamily': 'Inter, system-ui', 'color': COLORS['header_original'], 'fontSize': '42px'}
             )
         ], className="col-12 col-lg-4"),
         html.Div([
             html.Div(
                 "Transformation Notes",
-                className="text-center fw-bold fs-5",
-                style={'fontFamily': 'Inter, system-ui', 'color': COLORS['header_notes']}
+                className="text-center fw-bold",
+                style={'fontFamily': 'Inter, system-ui', 'color': COLORS['header_notes'], 'fontSize': '42px'}
             )
         ], className="col-12 col-lg-4"),
         html.Div([
             html.Div(
                 "Transformed Data",
-                className="text-center fw-bold fs-5",
-                style={'fontFamily': 'Inter, system-ui', 'color': COLORS['header_transformed']}
+                className="text-center fw-bold",
+                style={'fontFamily': 'Inter, system-ui', 'color': COLORS['header_transformed'], 'fontSize': '42px'}
             )
         ], className="col-12 col-lg-4")
-    ], className="row g-3 mb-3 pb-2", style={'borderBottom': COLORS['dashboard_border']}),
+    ], className="row g-3 mb-3 pb-2", style={'borderBottom': COLORS['border_light']}),
 
     # All column rows
     html.Div(build_dashboard_layout(), className="dashboard-rows")
 ], id='app-container', className="container-fluid py-4 px-3", style={
-    'background': dashboard_bg,
-    'backgroundSize': '50px 50px, 50px 50px, auto, auto, auto, auto',
+    'background': f'linear-gradient({COLORS["grid_color"]} 1px, transparent 1px), linear-gradient(to right, {COLORS["grid_color"]} 1px, transparent 1px), {COLORS["bg_main"]}',
+    'backgroundSize': '50px 50px, 50px 50px, auto',
     'minHeight': '100vh',
     'fontFamily': 'Inter, system-ui'
 })
