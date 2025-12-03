@@ -1,7 +1,7 @@
 
 import pandas as pd
 import dash
-from dash import dcc, html
+from dash import dcc, html, dash_table
 from dash.dependencies import Input, Output, State
 import plotly.express as px
 import plotly.graph_objects as go
@@ -247,6 +247,59 @@ def build_column_row(col):
     
     return row
 
+def create_correlation_matrix(df):
+    """Create a correlation matrix heatmap for numeric columns"""
+    # Select only numeric columns
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    
+    # Remove id column if present
+    if 'id' in numeric_cols:
+        numeric_cols.remove('id')
+    
+    # Calculate correlation matrix
+    corr_matrix = df[numeric_cols].corr()
+    
+    # Create heatmap
+    fig = go.Figure(data=go.Heatmap(
+        z=corr_matrix.values,
+        x=corr_matrix.columns,
+        y=corr_matrix.columns,
+        colorscale='RdBu',
+        zmid=0,
+        zmin=-1,
+        zmax=1,
+        text=np.round(corr_matrix.values, 2),
+        texttemplate='%{text}',
+        textfont={"size": 10},
+        colorbar=dict(
+            title="Correlation",
+            tickmode="linear",
+            tick0=-1,
+            dtick=0.5
+        )
+    ))
+    
+    fig.update_layout(
+        title=None,
+        height=600,
+        margin=dict(l=100, r=50, t=50, b=100),
+        plot_bgcolor=COLORS['bg_transparent'],
+        paper_bgcolor=COLORS['bg_transparent'],
+        font=dict(color=COLORS['text_primary'], size=12),
+        xaxis=dict(
+            tickangle=-45,
+            side='bottom',
+            tickfont=dict(size=11),
+            automargin=True
+        ),
+        yaxis=dict(
+            tickfont=dict(size=11),
+            automargin=True
+        )
+    )
+    
+    return fig
+
 def build_dashboard_layout():
     """Build all rows for all columns"""
     rows = []
@@ -305,7 +358,85 @@ app.layout = html.Div([
     ], className="row g-3 mb-3 pb-2", style={'borderBottom': COLORS['border_light']}),
 
     # All column rows
-    html.Div(build_dashboard_layout(), className="dashboard-rows")
+    html.Div(build_dashboard_layout(), className="dashboard-rows"),
+    
+    # Data table section at the bottom
+    html.Div([
+        html.Div([
+            html.Div([
+                html.Div(
+                    "Original Dataset",
+                    className="card-header fw-semibold",
+                    style={"backgroundColor": COLORS['card_background_color']}
+                ),
+                html.Div([
+                    dash_table.DataTable(
+                        id='data-table',
+                        columns=[{"name": col, "id": col} for col in original_data.columns],
+                        data=original_data.to_dict('records'),
+                        page_size=10,
+                        style_table={
+                            'overflowX': 'auto',
+                            'overflowY': 'auto',
+                            'maxHeight': '500px'
+                        },
+                        style_header={
+                            'backgroundColor': COLORS['header'],
+                            'color': COLORS['text_light'],
+                            'fontWeight': 'bold',
+                            'fontFamily': 'Inter, system-ui',
+                            'fontSize': '14px',
+                            'textAlign': 'center',
+                            'border': '1px solid #ddd'
+                        },
+                        style_cell={
+                            'textAlign': 'left',
+                            'padding': '10px',
+                            'fontFamily': 'Inter, system-ui',
+                            'fontSize': '13px',
+                            'border': '1px solid #ddd',
+                            'minWidth': '100px',
+                            'maxWidth': '300px',
+                            'whiteSpace': 'normal'
+                        },
+                        style_data={
+                            'backgroundColor': COLORS['bg_main'],
+                            'color': COLORS['text_primary']
+                        },
+                        style_data_conditional=[
+                            {
+                                'if': {'row_index': 'odd'},
+                                'backgroundColor': COLORS['card_background_color']
+                            }
+                        ],
+                        fixed_rows={'headers': True},
+                        sort_action='native',
+                        filter_action='native'
+                    )
+                ], className="card-body p-3")
+            ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+        ], className="col-12")
+    ], className="row mt-5 mb-4"),
+    
+    # Correlation matrix section
+    html.Div([
+        html.Div([
+            html.Div([
+                html.Div(
+                    "Correlation Matrix (Transformed Data)",
+                    className="card-header fw-semibold",
+                    style={"backgroundColor": COLORS['card_background_color']}
+                ),
+                html.Div([
+                    dcc.Graph(
+                        id='correlation-matrix',
+                        figure=create_correlation_matrix(transformed_data),
+                        config={'displayModeBar': True}
+                    )
+                ], className="card-body p-3")
+            ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+        ], className="col-12")
+    ], className="row mt-4 mb-4")
 ], id='app-container', className="container-fluid py-4 px-3", style={
     'background': COLORS['bg_main'],
     'minHeight': '100vh',
