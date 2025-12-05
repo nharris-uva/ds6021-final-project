@@ -33,11 +33,14 @@ BOOTSTRAP_CSS = "https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap
 GOOGLE_FONTS = "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap"
 
 # Load data
-raw_data = pd.read_csv("data/all_movie_features_15_to_19.csv").drop(columns=["Unnamed: 0"]).head(100)
-
-metadata = raw_data[["id", "title", "adult", "backdrop_path", "poster_path", "imdb_id", "overview", "tagline", "video"]]
-original_data = raw_data.drop(columns=["adult", "backdrop_path", "poster_path", "imdb_id", "overview", "tagline", "title", "original_title", "video", "homepage", "production_companies", "production_countries", "status", "spoken_languages"] + [col for col in raw_data.columns if "belongs_to_collection" in col], axis=1)
+raw_data = pd.read_csv("data/final_movie_table.csv")
+# metadata = raw_data[["id", "title", "adult", "backdrop_path", "poster_path", "imdb_id", "overview", "tagline", "video"]]
+# original_data = raw_data.drop(columns=["adult", "backdrop_path", "poster_path", "imdb_id", "overview", "tagline", "title", "original_title", "video", "homepage", "production_companies", "production_countries", "status", "spoken_languages"] + [col for col in raw_data.columns if "belongs_to_collection" in col], axis=1)
+# transformed_data = original_data.copy()
+original_data = raw_data.copy()
 transformed_data = original_data.copy()
+
+
 
 #Transformations:
 #Transform budget
@@ -164,6 +167,65 @@ def create_text_placeholder(col):
     )
     return fig
 
+def create_missingness_bar(col: str):
+    """Create a stacked bar chart showing % missing vs present in transformed data."""
+    trans_pct_missing = float(transformed_data[col].isna().mean() * 100)
+    trans_pct_present = 100 - trans_pct_missing
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=["Transformed"],
+            y=[trans_pct_present],
+            name="Present",
+            marker_color="#2ecc71",
+            text=[f"{trans_pct_present:.1f}%"],
+            textposition="inside",
+        )
+    )
+    fig.add_trace(
+        go.Bar(
+            x=["Transformed"],
+            y=[trans_pct_missing],
+            name="Missing",
+            marker_color=COLORS['graph_bg'],
+            text=[f"{trans_pct_missing:.1f}%"],
+            textposition="inside",
+        )
+    )
+    fig.update_layout(
+        title=None,
+        height=140,
+        margin=dict(l=10, r=10, t=30, b=10),
+        barmode="stack",
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.05,
+            xanchor="center",
+            x=0.5,
+            font=dict(size=10),
+        ),
+        plot_bgcolor=COLORS['bg_transparent'],
+        paper_bgcolor=COLORS['bg_transparent'],
+        font=dict(color=COLORS['text_primary'], size=12),
+        xaxis=dict(
+            title=None,
+            tickfont=dict(size=11),
+            automargin=True,
+        ),
+        yaxis=dict(
+            title="Percentage %",
+            range=[0, 100],
+            tick0=0,
+            dtick=20,
+            tickfont=dict(size=11),
+            automargin=True,
+        ),
+    )
+    return fig
+
 def build_column_row(col):
     """Build a single row for one column with original, notes, and transformed cards"""
     col_type = get_column_type(original_data, col)
@@ -202,7 +264,7 @@ def build_column_row(col):
             ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
         ], className="col-12 col-lg-4 mb-3"),
         
-        # Middle card - Transformation notes
+        # Middle card - Transformation notes + missingness
         html.Div([
             html.Div([
                 html.Div(
@@ -210,19 +272,27 @@ def build_column_row(col):
                     className="card-header fw-semibold",
                     style={"backgroundColor": COLORS['card_background_color']}
                 ),
-                html.Div(
-                    dcc.Markdown(
-                        children=notes,
-                        className="small"
-                    ),
-                    className="card-body",
-                    style={
-                        "height": "280px",
-                        "overflowY": "auto",
-                        "whiteSpace": "pre-wrap",
-                        "fontSize": "14px"
-                    }
-                )
+                html.Div([
+                    html.Div([
+                        dcc.Graph(
+                            figure=create_missingness_bar(col),
+                            config={'displayModeBar': False},
+                            style={"height": "140px"}
+                        )
+                    ], className="mb-2"),
+                    html.Div(
+                        dcc.Markdown(
+                            children=notes,
+                            className="small"
+                        ),
+                        style={
+                            "maxHeight": "260px",
+                            "overflowY": "auto",
+                            "whiteSpace": "pre-wrap",
+                            "fontSize": "14px"
+                        }
+                    )
+                ], className="card-body")
             ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
         ], className="col-12 col-lg-4 mb-3"),
         
@@ -442,7 +512,6 @@ app.layout = html.Div([
     'minHeight': '100vh',
     'fontFamily': 'Inter, system-ui'
 })
-
 
 if __name__ == '__main__':
     app.run(debug=True, port=8050, host='127.0.0.1')
