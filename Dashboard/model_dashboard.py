@@ -36,7 +36,7 @@ GOOGLE_FONTS = "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&
 
 # Load and preprocess data
 def load_and_preprocess_data():
-    df = pd.read_csv("New Data and Work/final_movie_table.csv")
+    df = pd.read_csv("New Data and Work/final_movie_table.csv").head(1000)
     df_nz = df[df['budget'] > 0].copy()
     df_nz['log_budget'] = np.log1p(df_nz['budget'])
     df_nz['log_revenue'] = np.log1p(df_nz['revenue'])
@@ -124,6 +124,7 @@ def prepare_categorical_data(df_nz):
     return df_dummies
 
 def fit_knn_model(df_num):
+    """Fit KNN with tuning curves and diagnostics."""
     X = df_num.drop(columns=['vote_average'])
     y = df_num['vote_average']
     
@@ -133,12 +134,21 @@ def fit_knn_model(df_num):
     X_train_scaled = scaler.fit_transform(X_train)
     X_valid_scaled = scaler.transform(X_valid)
     
+    # Baseline validation RMSE curve across k (default euclidean/uniform)
+    k_values = list(range(1, 51))
+    rmse_curve = []
+    for k in k_values:
+        m = KNeighborsRegressor(n_neighbors=k)
+        m.fit(X_train_scaled, y_train)
+        preds = m.predict(X_valid_scaled)
+        rmse_curve.append(np.sqrt(mean_squared_error(y_valid, preds)))
+    
+    # Grid search for tuned configuration
     param_grid = {
-        'n_neighbors': list(range(1, 51)),
+        'n_neighbors': k_values,
         'weights': ['uniform', 'distance'],
         'metric': ['euclidean', 'manhattan']
     }
-    
     knn_gs = GridSearchCV(
         KNeighborsRegressor(),
         param_grid,
@@ -146,14 +156,34 @@ def fit_knn_model(df_num):
         cv=5,
         n_jobs=-1
     )
-    
     knn_gs.fit(X_train_scaled, y_train)
     
     knn_final = KNeighborsRegressor(**knn_gs.best_params_)
     knn_final.fit(X_train_scaled, y_train)
-    
     preds_valid = knn_final.predict(X_valid_scaled)
     valid_rmse = np.sqrt(mean_squared_error(y_valid, preds_valid))
+    
+    # Tuned validation curve using best weights/metric across k
+    rmse_curve_tuned = []
+    for k in k_values:
+        tuned_model = KNeighborsRegressor(
+            n_neighbors=k,
+            weights=knn_gs.best_params_['weights'],
+            metric=knn_gs.best_params_['metric']
+        )
+        tuned_model.fit(X_train_scaled, y_train)
+        tuned_preds = tuned_model.predict(X_valid_scaled)
+        rmse_curve_tuned.append(np.sqrt(mean_squared_error(y_valid, tuned_preds)))
+    
+    # Correlation of features with predictions for extra diagnostic bar
+    preds_train = knn_final.predict(X_train_scaled)
+    corr_df = pd.DataFrame({
+        'feature': X.columns,
+        'correlation_with_knn_pred': [
+            np.corrcoef(X_train_scaled[:, i], preds_train)[0, 1]
+            for i in range(X_train_scaled.shape[1])
+        ]
+    }).sort_values('correlation_with_knn_pred', ascending=False)
     
     r = permutation_importance(knn_final, X_valid_scaled, y_valid, n_repeats=20, random_state=3001)
     importance_df = pd.DataFrame({
@@ -161,7 +191,21 @@ def fit_knn_model(df_num):
         'importance': r.importances_mean
     }).sort_values('importance', ascending=False)
     
-    return knn_final, X_train_scaled, X_valid_scaled, y_train, y_valid, valid_rmse, importance_df, scaler
+    return (
+        knn_final,
+        X_train_scaled,
+        X_valid_scaled,
+        y_train,
+        y_valid,
+        valid_rmse,
+        importance_df,
+        scaler,
+        k_values,
+        rmse_curve,
+        rmse_curve_tuned,
+        corr_df,
+        knn_gs.best_params_
+    )
 
 def fit_kmeans_model(df_num):
     X = df_num.drop(columns=['vote_average']).copy()
@@ -179,13 +223,15 @@ def fit_kmeans_model(df_num):
         inertia_list.append(km.inertia_)
         silhouette_list.append(silhouette_score(X_scaled, labels))
     
+    # Tuned solution (k=4) used throughout the dashboard
     kmeans_tuned = KMeans(n_clusters=4, random_state=3001, n_init=20)
     clusters = kmeans_tuned.fit_predict(X_scaled)
     
     df_clusters = df_num.copy()
     df_clusters['cluster'] = clusters
+    cluster_profiles = df_clusters.groupby('cluster').mean(numeric_only=True).reset_index()
     
-    return kmeans_tuned, X_scaled, df_clusters, k_values, inertia_list, silhouette_list
+    return kmeans_tuned, X_scaled, df_clusters, k_values, inertia_list, silhouette_list, cluster_profiles
 
 def fit_pca_model(df_num, X_scaled):
     X = df_num.drop(columns=['vote_average']).copy()
@@ -253,7 +299,9 @@ def fit_mlp_model(df_num):
         'importance': r_final.importances_mean
     }).sort_values('importance', ascending=False)
     
-    return mlp_final, final_train_rmse, final_valid_rmse, importance_final
+    loss_curve = mlp_final.loss_curve_
+    
+    return mlp_final, final_train_rmse, final_valid_rmse, importance_final, loss_curve
 
 # Load data
 print("Loading data...")
@@ -523,7 +571,47 @@ def build_linear_regression_section(ols_model):
         ], className="col-12")
     ], className="row mb-3")
 
-def build_knn_section(knn_importance, knn_rmse):
+def build_knn_section(knn_importance, knn_rmse, k_values, rmse_curve, rmse_curve_tuned, corr_df, best_params):
+    fig_rmse = px.line(
+        x=k_values,
+        y=rmse_curve,
+        markers=True,
+        labels={'x': 'k', 'y': 'Validation RMSE'},
+        title='KNN Validation RMSE by k (baseline)'
+    ).update_traces(line=dict(color=COLORS['graph_bg']), marker=dict(size=8)).update_layout(
+        height=360,
+        margin=DEFAULT_FIG_MARGIN,
+        plot_bgcolor=COLORS['bg_transparent'],
+        paper_bgcolor=COLORS['bg_transparent'],
+        font=dict(color=COLORS['text_primary'])
+    )
+    fig_rmse_tuned = px.line(
+        x=k_values,
+        y=rmse_curve_tuned,
+        markers=True,
+        labels={'x': 'k', 'y': 'Validation RMSE'},
+        title='Tuned KNN Validation RMSE by k'
+    ).update_traces(line=dict(color=COLORS['header']), marker=dict(size=8)).update_layout(
+        height=360,
+        margin=DEFAULT_FIG_MARGIN,
+        plot_bgcolor=COLORS['bg_transparent'],
+        paper_bgcolor=COLORS['bg_transparent'],
+        font=dict(color=COLORS['text_primary'])
+    )
+    fig_corr = px.bar(
+        corr_df,
+        x='feature',
+        y='correlation_with_knn_pred',
+        title='Feature Correlation with KNN Predictions'
+    ).update_layout(
+        height=360,
+        margin=DEFAULT_FIG_MARGIN,
+        plot_bgcolor=COLORS['bg_transparent'],
+        paper_bgcolor=COLORS['bg_transparent'],
+        font=dict(color=COLORS['text_primary']),
+        xaxis_tickangle=45
+    )
+
     return html.Div([
         html.Div([
             html.Div([
@@ -553,7 +641,21 @@ def build_knn_section(knn_importance, knn_rmse):
                     )
                 ], className="card-body p-2")
             ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
-        ], className="col-12 col-lg-6 mb-3"),
+        ], className="col-12 col-xl-4 mb-3"),
+        
+        html.Div([
+            html.Div([
+                html.Div(
+                    "KNN Validation Curves",
+                    className="card-header fw-semibold",
+                    style={"backgroundColor": COLORS['card_background_color']}
+                ),
+                html.Div([
+                    dcc.Graph(figure=fig_rmse, config={'displayModeBar': False}),
+                    dcc.Graph(figure=fig_rmse_tuned, config={'displayModeBar': False})
+                ], className="card-body p-2")
+            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+        ], className="col-12 col-xl-4 mb-3"),
         
         html.Div([
             html.Div([
@@ -564,16 +666,16 @@ def build_knn_section(knn_importance, knn_rmse):
                 ),
                 html.Div([
                     html.P(
-                        "The tuned KNN model (k=18, distance weighting, Manhattan distance) achieves strong "
-                        "predictive performance by exploiting local similarity in the feature space.",
+                        "The tuned KNN model exploits local similarity; expanded tuning (k, weights, metric) "
+                        "identified a Manhattan-distance, distance-weighted model with balanced bias-variance.",
                         className="mb-3"
                     ),
                     html.Div([
                         html.Strong("Model Configuration:"),
                         html.Ul([
-                            html.Li("Neighbors (k): 18"),
-                            html.Li("Weighting: Distance-based"),
-                            html.Li("Distance Metric: Manhattan"),
+                            html.Li(f"Neighbors (k): {best_params['n_neighbors']}"),
+                            html.Li(f"Weighting: {best_params['weights'].title()}"),
+                            html.Li(f"Distance Metric: {best_params['metric'].title()}"),
                             html.Li(f"Validation RMSE: {knn_rmse:.4f}"),
                         ])
                     ]),
@@ -582,21 +684,40 @@ def build_knn_section(knn_importance, knn_rmse):
                         html.Strong("Key Insights:"),
                         html.Ul([
                             html.Li("User engagement metrics dominate predictions"),
-                            html.Li("Movies cluster by audience participation patterns"),
-                            html.Li("Outperforms linear models through local neighborhood structure"),
+                            html.Li("Validation curves show overfitting at very low k and oversmoothing at high k"),
+                            html.Li("Distance weighting + Manhattan metric provide smoother generalization"),
                             html.Li("Financial predictors contribute less than engagement variables"),
                         ])
                     ])
                 ], className="card-body")
             ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
-        ], className="col-12 col-lg-6 mb-3")
+        ], className="col-12 col-xl-4 mb-3"),
+
+        html.Div([
+            html.Div([
+                html.Div(
+                    "Feature Correlation with KNN Predictions",
+                    className="card-header fw-semibold",
+                    style={"backgroundColor": COLORS['card_background_color']}
+                ),
+                html.Div([
+                    dcc.Graph(figure=fig_corr, config={'displayModeBar': False})
+                ], className="card-body p-2")
+            ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+        ], className="col-12 mb-3")
     ], className="row g-3")
 
-def build_clustering_section(X_pca, pca_clusters, k_values, silhouette_list):
+def build_clustering_section(X_pca, pca_clusters, k_values, silhouette_list, df_clusters, inertia_list, cluster_profiles):
     pca_2d = X_pca[:, :2]
     df_pca_plot = pd.DataFrame({
         'PC1': pca_2d[:, 0],
         'PC2': pca_2d[:, 1],
+        'Cluster': pca_clusters
+    })
+    df_pca3_plot = pd.DataFrame({
+        'PC1': X_pca[:, 0],
+        'PC2': X_pca[:, 1],
+        'PC3': X_pca[:, 2],
         'Cluster': pca_clusters
     })
     
@@ -607,9 +728,24 @@ def build_clustering_section(X_pca, pca_clusters, k_values, silhouette_list):
         color='Cluster',
         color_continuous_scale='Viridis',
         opacity=0.6,
-        title='K-Means Clusters in PCA Space'
+        title='Tuned K-Means Clusters in PCA Space'
     ).update_traces(marker=dict(size=5)).update_layout(
         height=400,
+        margin=DEFAULT_FIG_MARGIN,
+        plot_bgcolor=COLORS['bg_transparent'],
+        paper_bgcolor=COLORS['bg_transparent'],
+        font=dict(color=COLORS['text_primary'])
+    )
+
+    fig_pca3d = px.scatter_3d(
+        df_pca3_plot,
+        x='PC1', y='PC2', z='PC3',
+        color='Cluster',
+        color_continuous_scale='Viridis',
+        title='Tuned K-Means Clusters in 3D PCA Space',
+        opacity=0.6
+    ).update_traces(marker=dict(size=4)).update_layout(
+        height=420,
         margin=DEFAULT_FIG_MARGIN,
         plot_bgcolor=COLORS['bg_transparent'],
         paper_bgcolor=COLORS['bg_transparent'],
@@ -626,12 +762,62 @@ def build_clustering_section(X_pca, pca_clusters, k_values, silhouette_list):
         line=dict(color=COLORS['graph_bg']),
         marker=dict(size=8)
     ).update_layout(
-        height=400,
+        height=320,
         margin=DEFAULT_FIG_MARGIN,
         plot_bgcolor=COLORS['bg_transparent'],
         paper_bgcolor=COLORS['bg_transparent'],
         font=dict(color=COLORS['text_primary']),
         showlegend=False
+    )
+    
+    fig_inertia = px.line(
+        x=list(k_values),
+        y=inertia_list,
+        markers=True,
+        labels={'x': 'k', 'y': 'Inertia'},
+        title='Inertia by Number of Clusters'
+    ).update_traces(line=dict(color=COLORS['header']), marker=dict(size=8)).update_layout(
+        height=320,
+        margin=DEFAULT_FIG_MARGIN,
+        plot_bgcolor=COLORS['bg_transparent'],
+        paper_bgcolor=COLORS['bg_transparent'],
+        font=dict(color=COLORS['text_primary']),
+        showlegend=False
+    )
+    
+    cluster_profiles_melted = cluster_profiles.melt(
+        id_vars='cluster',
+        var_name='feature',
+        value_name='value'
+    )
+    fig_profiles = px.bar(
+        cluster_profiles_melted,
+        x='feature',
+        y='value',
+        color='cluster',
+        barmode='group',
+        title='Cluster Profiles: Average Scaled Feature Values'
+    ).update_layout(
+        height=360,
+        margin=DEFAULT_FIG_MARGIN,
+        plot_bgcolor=COLORS['bg_transparent'],
+        paper_bgcolor=COLORS['bg_transparent'],
+        font=dict(color=COLORS['text_primary']),
+        xaxis_tickangle=45
+    )
+    
+    fig_box = px.box(
+        df_clusters,
+        x='cluster',
+        y='vote_average',
+        title='Vote Average by Tuned Cluster (k = 4)',
+        labels={'cluster': 'Cluster', 'vote_average': 'Vote Average'}
+    ).update_layout(
+        height=360,
+        margin=DEFAULT_FIG_MARGIN,
+        plot_bgcolor=COLORS['bg_transparent'],
+        paper_bgcolor=COLORS['bg_transparent'],
+        font=dict(color=COLORS['text_primary'])
     )
     
     return html.Div([
@@ -646,23 +832,77 @@ def build_clustering_section(X_pca, pca_clusters, k_values, silhouette_list):
                     dcc.Graph(figure=fig_pca, config={'displayModeBar': False})
                 ], className="card-body p-2")
             ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
-        ], className="col-12 col-lg-6 mb-3"),
+        ], className="col-12 col-xl-6 mb-3"),
         
         html.Div([
             html.Div([
                 html.Div(
-                    "Clustering Tuning Results",
+                    "Clustering Tuning Diagnostics",
                     className="card-header fw-semibold",
                     style={"backgroundColor": COLORS['card_background_color']}
                 ),
                 html.Div([
-                    dcc.Graph(figure=fig_silhouette, config={'displayModeBar': False})
+                    dcc.Graph(figure=fig_silhouette, config={'displayModeBar': False}),
+                    dcc.Graph(figure=fig_inertia, config={'displayModeBar': False})
                 ], className="card-body p-2")
             ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
-        ], className="col-12 col-lg-6 mb-3")
+        ], className="col-12 col-xl-6 mb-3"),
+
+        html.Div([
+            html.Div([
+                html.Div(
+                    "3D PCA View of Clusters",
+                    className="card-header fw-semibold",
+                    style={"backgroundColor": COLORS['card_background_color']}
+                ),
+                html.Div([
+                    dcc.Graph(figure=fig_pca3d, config={'displayModeBar': False})
+                ], className="card-body p-2")
+            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+        ], className="col-12 mb-3"),
+
+        html.Div([
+            html.Div([
+                html.Div(
+                    "Cluster Profiles",
+                    className="card-header fw-semibold",
+                    style={"backgroundColor": COLORS['card_background_color']}
+                ),
+                html.Div([
+                    dcc.Graph(figure=fig_profiles, config={'displayModeBar': False})
+                ], className="card-body p-2")
+            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+        ], className="col-12 col-xl-6 mb-3"),
+
+        html.Div([
+            html.Div([
+                html.Div(
+                    "Cluster Outcome Distribution",
+                    className="card-header fw-semibold",
+                    style={"backgroundColor": COLORS['card_background_color']}
+                ),
+                html.Div([
+                    dcc.Graph(figure=fig_box, config={'displayModeBar': False})
+                ], className="card-body p-2")
+            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+        ], className="col-12 col-xl-6 mb-3")
     ], className="row g-3")
 
-def build_mlp_section(mlp_importance, mlp_train_rmse, mlp_valid_rmse):
+def build_mlp_section(mlp_importance, mlp_train_rmse, mlp_valid_rmse, loss_curve):
+    fig_loss = px.line(
+        x=list(range(len(loss_curve))),
+        y=loss_curve,
+        markers=True,
+        labels={'x': 'Iteration', 'y': 'Training Loss'},
+        title='MLP Training Loss Curve'
+    ).update_traces(mode='lines+markers', line=dict(color=COLORS['graph_bg'])).update_layout(
+        height=360,
+        margin=DEFAULT_FIG_MARGIN,
+        plot_bgcolor=COLORS['bg_transparent'],
+        paper_bgcolor=COLORS['bg_transparent'],
+        font=dict(color=COLORS['text_primary'])
+    )
+
     return html.Div([
         html.Div([
             html.Div([
@@ -681,7 +921,7 @@ def build_mlp_section(mlp_importance, mlp_train_rmse, mlp_valid_rmse):
                             color_discrete_sequence=[COLORS['graph_bg']],
                             title="MLP: Permutation Importance"
                         ).update_layout(
-                            height=400,
+                            height=360,
                             margin=DEFAULT_FIG_MARGIN,
                             plot_bgcolor=COLORS['bg_transparent'],
                             paper_bgcolor=COLORS['bg_transparent'],
@@ -692,7 +932,20 @@ def build_mlp_section(mlp_importance, mlp_train_rmse, mlp_valid_rmse):
                     )
                 ], className="card-body p-2")
             ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
-        ], className="col-12 col-lg-6 mb-3"),
+        ], className="col-12 col-xl-4 mb-3"),
+        
+        html.Div([
+            html.Div([
+                html.Div(
+                    "MLP Training Dynamics",
+                    className="card-header fw-semibold",
+                    style={"backgroundColor": COLORS['card_background_color']}
+                ),
+                html.Div([
+                    dcc.Graph(figure=fig_loss, config={'displayModeBar': False})
+                ], className="card-body p-2")
+            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+        ], className="col-12 col-xl-4 mb-3"),
         
         html.Div([
             html.Div([
@@ -729,7 +982,7 @@ def build_mlp_section(mlp_importance, mlp_train_rmse, mlp_valid_rmse):
                     ])
                 ], className="card-body")
             ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
-        ], className="col-12 col-lg-6 mb-3")
+        ], className="col-12 col-xl-4 mb-3")
     ], className="row g-3")
 
 def build_pca_section():
@@ -750,7 +1003,7 @@ def build_pca_section():
         title='Scree Plot: Variance by Component',
         color_discrete_sequence=[COLORS['graph_bg']]
     ).update_layout(
-        height=400,
+        height=360,
         margin=DEFAULT_FIG_MARGIN,
         plot_bgcolor=COLORS['bg_transparent'],
         paper_bgcolor=COLORS['bg_transparent'],
@@ -773,14 +1026,86 @@ def build_pca_section():
         line_color='red',
         annotation_text='80% threshold'
     ).update_layout(
-        height=400,
+        height=360,
         margin=DEFAULT_FIG_MARGIN,
         plot_bgcolor=COLORS['bg_transparent'],
         paper_bgcolor=COLORS['bg_transparent'],
         font=dict(color=COLORS['text_primary']),
         showlegend=False
     )
-    
+
+    # Loadings for first three components
+    loadings = pd.DataFrame(
+        pca_full.components_.T,
+        columns=[f'PC{i+1}' for i in range(len(explained_var))],
+        index=X.columns
+    )
+    fig_loadings = px.bar(
+        loadings[['PC1', 'PC2', 'PC3']].reset_index().melt(id_vars='index', var_name='Component', value_name='Loading'),
+        x='index',
+        y='Loading',
+        color='Component',
+        barmode='group',
+        title="PCA Loadings for First Three Components"
+    ).update_layout(
+        height=360,
+        margin=DEFAULT_FIG_MARGIN,
+        plot_bgcolor=COLORS['bg_transparent'],
+        paper_bgcolor=COLORS['bg_transparent'],
+        font=dict(color=COLORS['text_primary']),
+        xaxis_tickangle=45
+    )
+
+    # 2D projection colored by vote_average
+    X_pca2 = X_scaled @ pca_full.components_.T[:, :2]
+    df_pca2 = pd.DataFrame({
+        'PC1': X_pca2[:, 0],
+        'PC2': X_pca2[:, 1],
+        'vote_average': df_num['vote_average'].values
+    })
+    fig_pca2 = px.scatter(
+        df_pca2,
+        x='PC1',
+        y='PC2',
+        color='vote_average',
+        color_continuous_scale='Viridis',
+        title='Movies Projected onto PC1 & PC2 (Colored by Vote Average)',
+        opacity=0.6
+    ).update_traces(marker=dict(size=6)).update_layout(
+        height=360,
+        margin=DEFAULT_FIG_MARGIN,
+        plot_bgcolor=COLORS['bg_transparent'],
+        paper_bgcolor=COLORS['bg_transparent'],
+        font=dict(color=COLORS['text_primary'])
+    )
+
+    # 3D projection colored by vote_average
+    pca3 = PCA(n_components=3)
+    X_pca3 = pca3.fit_transform(X_scaled)
+    df_pca3 = pd.DataFrame({
+        'PC1': X_pca3[:, 0],
+        'PC2': X_pca3[:, 1],
+        'PC3': X_pca3[:, 2],
+        'vote_average': df_num['vote_average'].values
+    })
+    fig_pca3 = go.Figure()
+    fig_pca3.add_trace(go.Scatter3d(
+        x=df_pca3['PC1'],
+        y=df_pca3['PC2'],
+        z=df_pca3['PC3'],
+        mode='markers',
+        marker=dict(size=3.5, color=df_pca3['vote_average'], opacity=0.55, colorbar=dict(title='Vote Avg'))
+    ))
+    fig_pca3.update_layout(
+        title='3D PCA Projection Colored by Vote Average',
+        scene=dict(xaxis_title='PC1', yaxis_title='PC2', zaxis_title='PC3'),
+        height=520,
+        margin=DEFAULT_FIG_MARGIN,
+        plot_bgcolor=COLORS['bg_transparent'],
+        paper_bgcolor=COLORS['bg_transparent'],
+        font=dict(color=COLORS['text_primary'])
+    )
+
     return html.Div([
         html.Div([
             html.Div([
@@ -793,7 +1118,7 @@ def build_pca_section():
                     dcc.Graph(figure=fig_scree, config={'displayModeBar': False})
                 ], className="card-body p-2")
             ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
-        ], className="col-12 col-lg-6 mb-3"),
+        ], className="col-12 col-xl-6 mb-3"),
         
         html.Div([
             html.Div([
@@ -806,7 +1131,46 @@ def build_pca_section():
                     dcc.Graph(figure=fig_cum, config={'displayModeBar': False})
                 ], className="card-body p-2")
             ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
-        ], className="col-12 col-lg-6 mb-3")
+        ], className="col-12 col-xl-6 mb-3"),
+
+        html.Div([
+            html.Div([
+                html.Div(
+                    "PCA Loadings",
+                    className="card-header fw-semibold",
+                    style={"backgroundColor": COLORS['card_background_color']}
+                ),
+                html.Div([
+                    dcc.Graph(figure=fig_loadings, config={'displayModeBar': False})
+                ], className="card-body p-2")
+            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+        ], className="col-12 col-xl-6 mb-3"),
+
+        html.Div([
+            html.Div([
+                html.Div(
+                    "PCA Projection (2D)",
+                    className="card-header fw-semibold",
+                    style={"backgroundColor": COLORS['card_background_color']}
+                ),
+                html.Div([
+                    dcc.Graph(figure=fig_pca2, config={'displayModeBar': False})
+                ], className="card-body p-2")
+            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+        ], className="col-12 col-xl-6 mb-3"),
+
+        html.Div([
+            html.Div([
+                html.Div(
+                    "PCA Projection (3D)",
+                    className="card-header fw-semibold",
+                    style={"backgroundColor": COLORS['card_background_color']}
+                ),
+                html.Div([
+                    dcc.Graph(figure=fig_pca3, config={'displayModeBar': False})
+                ], className="card-body p-2")
+            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+        ], className="col-12")
     ], className="row g-3")
 
 # App layout - initial
@@ -966,11 +1330,25 @@ def update_knn_section(n):
         return model_cache['knn_html']  # Return cached HTML
     print("Fitting KNN model...")
     try:
-        knn_model, X_train_knn, X_valid_knn, y_train_knn, y_valid_knn, knn_rmse, knn_importance, knn_scaler = fit_knn_model(df_num)
+        (
+            knn_model,
+            X_train_knn,
+            X_valid_knn,
+            y_train_knn,
+            y_valid_knn,
+            knn_rmse,
+            knn_importance,
+            knn_scaler,
+            k_values,
+            rmse_curve,
+            rmse_curve_tuned,
+            corr_df,
+            best_params
+        ) = fit_knn_model(df_num)
         # Cache the result
         model_cache['knn_rmse'] = knn_rmse
         model_cache['knn_fitted'] = True
-        html_content = build_knn_section(knn_importance, knn_rmse)
+        html_content = build_knn_section(knn_importance, knn_rmse, k_values, rmse_curve, rmse_curve_tuned, corr_df, best_params)
         model_cache['knn_html'] = html_content
         return html_content
     except Exception as e:
@@ -987,10 +1365,10 @@ def update_kmeans_section(n):
         return model_cache['kmeans_html']  # Return cached HTML
     print("Fitting K-Means model...")
     try:
-        kmeans_model, X_scaled_km, df_clusters, k_values, inertia_list, silhouette_list = fit_kmeans_model(df_num)
+        kmeans_model, X_scaled_km, df_clusters, k_values, inertia_list, silhouette_list, cluster_profiles = fit_kmeans_model(df_num)
         pca_model, X_pca, pca_clusters, pca_summary = fit_pca_model(df_num, X_scaled_km)
         model_cache['kmeans_fitted'] = True
-        html_content = build_clustering_section(X_pca, pca_clusters, k_values, silhouette_list)
+        html_content = build_clustering_section(X_pca, pca_clusters, k_values, silhouette_list, df_clusters, inertia_list, cluster_profiles)
         model_cache['kmeans_html'] = html_content
         return html_content
     except Exception as e:
@@ -1007,7 +1385,7 @@ def update_mlp_section(n):
         return model_cache['mlp_html']  # Return cached HTML
     print("Fitting MLP model...")
     try:
-        mlp_model, mlp_train_rmse, mlp_valid_rmse, mlp_importance = fit_mlp_model(df_num)
+        mlp_model, mlp_train_rmse, mlp_valid_rmse, mlp_importance, loss_curve = fit_mlp_model(df_num)
         # Cache the results
         model_cache['mlp_train_rmse'] = mlp_train_rmse
         model_cache['mlp_valid_rmse'] = mlp_valid_rmse
@@ -1015,7 +1393,7 @@ def update_mlp_section(n):
         # Check if all models are fitted
         if model_cache['knn_fitted'] and model_cache['mlp_fitted']:
             model_cache['fitted'] = True
-        html_content = build_mlp_section(mlp_importance, mlp_train_rmse, mlp_valid_rmse)
+        html_content = build_mlp_section(mlp_importance, mlp_train_rmse, mlp_valid_rmse, loss_curve)
         model_cache['mlp_html'] = html_content
         return html_content
     except Exception as e:
