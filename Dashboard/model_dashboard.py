@@ -1265,65 +1265,6 @@ app.layout = html.Div([
                                 ], className="col-12")
                             ], className="row mb-4")
                         ]
-                    ),
-                    dcc.Tab(
-                        label='Model Comparison',
-                        value='comparison',
-                        children=[
-                            html.Div([
-                                html.Div([
-                                    html.Div(id='comparison-section-container', children=[
-                                        html.Div([
-                                            html.Div([
-                                                html.Div(
-                                                    "Model Performance Comparison",
-                                                    className="card-header fw-semibold",
-                                                    style={"backgroundColor": COLORS['card_background_color']}
-                                                ),
-                                                html.Div([
-                                                    html.P("Loading model results...", style={"textAlign": "center", "padding": "20px"})
-                                                ], className="card-body p-3")
-                                            ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
-                                        ], className="col-12 mb-4"),
-                                        
-                                        html.Div([
-                                            html.Div([
-                                                html.Div(
-                                                    "Key Conclusions",
-                                                    className="card-header fw-semibold",
-                                                    style={"backgroundColor": COLORS['card_background_color']}
-                                                ),
-                                                html.Div([
-                                                    html.H5("Model Performance Rankings:", className="fw-bold mt-3"),
-                                                    html.Ol([
-                                                        html.Li(html.Strong("MLP (Best):"), " Validation RMSE ~0.88 - Captures nonlinear relationships effectively"),
-                                                        html.Li(html.Strong("KNN (Strong):"), " Validation RMSE will update - Excellent local neighborhood exploitation"),
-                                                        html.Li(html.Strong("Linear Regression:"), " Provides interpretability but limited by linearity assumption"),
-                                                        html.Li(html.Strong("K-Means:"), " Unsupervised clustering reveals natural movie groupings"),
-                                                    ]),
-                                                    html.Hr(),
-                                                    html.H5("Universal Finding:", className="fw-bold mt-3"),
-                                                    html.P(
-                                                        "Across all models, user engagement metrics (log vote count and log user rating count) "
-                                                        "are the dominant predictors of movie ratings. Financial attributes (budget, revenue) "
-                                                        "contribute less than engagement variables, suggesting that audience interaction patterns "
-                                                        "are more informative than production scale."
-                                                    ),
-                                                    html.Hr(),
-                                                    html.H5("Structural Insights:", className="fw-bold mt-3"),
-                                                    html.Ul([
-                                                        html.Li("PCA reveals that >50% of variance is driven by a single engagement-scale dimension"),
-                                                        html.Li("K-Means identifies 4 natural movie archetypes based on budget, engagement, and runtime"),
-                                                        html.Li("Nonlinear models (KNN, MLP) substantially outperform linear approaches"),
-                                                        html.Li("The dataset exhibits meaningful local structure that distance-based and neural approaches can exploit"),
-                                                    ])
-                                                ], className="card-body")
-                                            ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
-                                        ], className="col-12")
-                                    ], className="row g-3")
-                                ], className="col-12")
-                            ], className="row mb-4")
-                        ]
                     )
                 ],
                 style={
@@ -1333,6 +1274,61 @@ app.layout = html.Div([
             )
         ], className="col-12")
     ], className="row mb-4"),
+
+    # Bottom Model Comparison card outside tabs
+    html.Div([
+        html.Div([
+            html.Div(id='comparison-section-container', children=[
+                html.Div([
+                    html.Div([
+                        html.Div(
+                            "Model Performance Comparison",
+                            className="card-header fw-semibold",
+                            style={"backgroundColor": COLORS['card_background_color']}
+                        ),
+                        html.Div([
+                            html.P("Loading model results...", style={"textAlign": "center", "padding": "20px"})
+                        ], className="card-body p-3")
+                    ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+                ], className="col-12 mb-4"),
+
+                html.Div([
+                    html.Div([
+                        html.Div(
+                            "Key Conclusions",
+                            className="card-header fw-semibold",
+                            style={"backgroundColor": COLORS['card_background_color']}
+                        ),
+                        html.Div([
+                            html.H5("Model Performance Rankings:", className="fw-bold mt-3"),
+                            html.Ol([
+                                html.Li(html.Strong("MLP (Best):"), " Validation RMSE ~0.88 - Captures nonlinear relationships effectively"),
+                                html.Li(html.Strong("KNN (Strong):"), " Validation RMSE will update - Excellent local neighborhood exploitation"),
+                                html.Li(html.Strong("Linear Regression:"), " Provides interpretability but limited by linearity assumption"),
+                                html.Li(html.Strong("K-Means:"), " Unsupervised clustering reveals natural movie groupings"),
+                            ]),
+                            html.Hr(),
+                            html.H5("Universal Finding:", className="fw-bold mt-3"),
+                            html.P(
+                                "Across all models, user engagement metrics (log vote count and log user rating count) "
+                                "are the dominant predictors of movie ratings. Financial attributes (budget, revenue) "
+                                "contribute less than engagement variables, suggesting that audience interaction patterns "
+                                "are more informative than production scale."
+                            ),
+                            html.Hr(),
+                            html.H5("Structural Insights:", className="fw-bold mt-3"),
+                            html.Ul([
+                                html.Li("PCA reveals that >50% of variance is driven by a single engagement-scale dimension"),
+                                html.Li("K-Means identifies 4 natural movie archetypes based on budget, engagement, and runtime"),
+                                html.Li("Nonlinear models (KNN, MLP) substantially outperform linear approaches"),
+                                html.Li("The dataset exhibits meaningful local structure that distance-based and neural approaches can exploit"),
+                            ])
+                        ], className="card-body")
+                    ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+                ], className="col-12")
+            ], className="row g-3")
+        ], className="col-12")
+    ], className="row mb-4")
     
 ], id='app-container', className="container-fluid py-4 px-3", style={
     'background': COLORS['bg_main'],
@@ -1443,9 +1439,11 @@ def update_mlp_section(n):
 @callback(
     Output('comparison-section-container', 'children'),
     Input('interval-trigger', 'n_intervals'),
+    Input('knn-section-container', 'children'),
+    Input('mlp-section-container', 'children'),
     prevent_initial_call=False
 )
-def update_comparison_section(n):
+def update_comparison_section(n, knn_children, mlp_children):
     # Return cached content if already fitted
     if model_cache['fitted'] and model_cache['comparison_html'] is not None:
         return model_cache['comparison_html']
