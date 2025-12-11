@@ -57,7 +57,7 @@ app = dash.Dash(
 
 # Plotly visual style
 px.defaults.template = "plotly_dark"
-DEFAULT_FIG_MARGIN = dict(l=10, r=10, t=10, b=20)
+DEFAULT_FIG_MARGIN = dict(l=20, r=20, t=60, b=40)
 
 # Dictionary to store transformation notes for each column
 TRANSFORMATION_NOTES = {
@@ -1353,6 +1353,8 @@ def build_data_tab_content():
     columns = [col for col in transformed_data.columns]
 
     return html.Div([
+        html.H3("Data", className="text-center mb-4",
+               style={'fontFamily': 'Inter, system-ui', 'color': COLORS['header']}),
         # Selector
         html.Div([
             html.Div([
@@ -1514,53 +1516,56 @@ app.layout = html.Div([
     html.Div([
         html.Div(id='summary-content', children=[
             html.H3("Project Summary", className="text-center mb-4",
-                   style={'fontFamily': 'Inter, system-ui', 'color': COLORS['header']}),
+               style={'fontFamily': 'Inter, system-ui', 'color': COLORS['header']}),
             html.Div([
+            html.Div([
+                html.Div("About This Dashboard", className="card-header fw-semibold"),
                 html.Div([
-                    html.Div("About This Dashboard", className="card-header fw-semibold"),
-                    html.Div([
-                        html.P(
-                            "This dashboard explores movie data and predictive modeling for ratings. "
-                            "Use the Models tab to compare different algorithms and the Data tab to inspect features, distributions, and transformations.",
-                            className="mb-0",
-                            style={'fontFamily': 'Inter, system-ui', 'fontSize': '16px', 'color': COLORS['text_secondary']}
-                        )
-                    ], className="card-body")
-                ], className="card"),
+                html.P(
+                    "This dashboard explores movie data and predictive modeling for ratings. "
+                    "Use the Models tab to compare different algorithms and the Data tab to inspect features, distributions, and transformations.",
+                    className="mb-0",
+                    style={'fontFamily': 'Inter, system-ui', 'fontSize': '16px', 'color': COLORS['text_secondary']}
+                )
+                ], className="card-body")
+            ], className="card"),
             ], className="mb-4"),
 
             html.Div([
+            html.Div([
+                html.Div("Group Members", className="card-header fw-semibold"),
                 html.Div([
-                    html.Div("Group Members", className="card-header fw-semibold"),
-                    html.Div([
-                        html.Ul([
-                            html.Li("Member 1"),
-                            html.Li("Member 2"),
-                            html.Li("Member 3"),
-                            html.Li("Member 4")
-                        ], className="mb-0", style={'fontFamily': 'Inter, system-ui'})
-                    ], className="card-body")
-                ], className="card"),
+                html.Ul([
+                    html.Li("Sabine Segaloff"),
+                    html.Li("Tianyin Mao"),
+                    html.Li("Mason Earp"),
+                    html.Li("Nick Thornton"),
+                    html.Li("Nate Harris"),
+                ], className="mb-0", style={'fontFamily': 'Inter, system-ui'})
+                ], className="card-body")
+            ], className="card"),
             ], className="mb-4"),
 
             html.Div([
+            html.Div([
+                html.Div("Dataset", className="card-header fw-semibold"),
                 html.Div([
-                    html.Div("Dataset", className="card-header fw-semibold"),
-                    html.Div([
-                        html.P(
-                            [
-                                "You can download the dataset used in this project here: ",
-                                html.A("final_movie_table.csv", href="/download/final_movie_table", target="_blank")
-                            ],
-                            className="mb-0",
-                            style={'fontFamily': 'Inter, system-ui', 'fontSize': '16px'}
-                        )
-                    ], className="card-body")
-                ], className="card"),
+                html.P(
+                    [
+                    "Dataset source: ",
+                    html.A("The Movies Dataset on Kaggle", href="https://www.kaggle.com/datasets/rounakbanik/the-movies-dataset", target="_blank")
+                    ],
+                    className="mb-0",
+                    style={'fontFamily': 'Inter, system-ui', 'fontSize': '16px'}
+                )
+                ], className="card-body")
+            ], className="card"),
             ])
         ], style={'display': 'block'}),
         
         html.Div(id='models-content', children=[
+            html.H3("Models", className="text-center mb-4",
+               style={'fontFamily': 'Inter, system-ui', 'color': COLORS['header']}),
             # Hidden storage divs for model data
             dcc.Store(id='linear-model-store'),
             dcc.Store(id='knn-model-store'),
