@@ -1,7 +1,15 @@
 # ds6021-final-project
 Final Project for Intro to Predictive Modeling Fall 2025
 
-Data:
+Predicting Cinematic Success:
+A Multi-Model Analysis of Movie Ratings
+
+Group: 3
+
+Group Members:
+Mason Earp, Nate Harris, Tianyin Mao, Sabine Segaloff, Nicholas Thornton
+
+Data: The Movie Database API, Kaggle
 
 movie id scraper: Done
 
