@@ -22,6 +22,9 @@ Data:
 The Movies Dataset:
 https://www.kaggle.com/datasets/rounakbanik/the-movies-dataset
 
+The Question:
+What factors lead to movie success, where success is defined by the average vote rating?
+
 Target Variable:
 vote_average
 
