@@ -1307,6 +1307,116 @@ def build_column_row(original_col: str, transformed_col: str):
     
     return row
 
+def build_column_detail(selected_col: str):
+    """Build per-column detail panel using transformed (model-used) data only.
+    Shows distribution chart and descriptive metrics for the selected column.
+    """
+    # Use the selected column directly from transformed_data
+    transformed_col = selected_col
+    if transformed_col not in transformed_data.columns:
+        return html.Div([
+            html.Div([
+                html.Div(
+                    f"Column '{selected_col}' is not available in transformed data",
+                    className="card-header fw-semibold",
+                    style={"backgroundColor": COLORS['card_background_color']}
+                ),
+                html.Div([
+                    html.P("Please select another column.")
+                ], className="card-body")
+            ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+        ])
+
+    # Decide visualization type
+    col_type = get_column_type(transformed_data, transformed_col)
+    if col_type == 'numeric':
+        dist_fig = create_numeric_graph(transformed_data, transformed_col)
+        series = transformed_data[transformed_col]
+        metrics = {
+            'Count': int(series.count()),
+            'Missing %': float(series.isna().mean() * 100),
+            'Mean': float(series.mean()),
+            'Std': float(series.std()),
+            'Min': float(series.min()),
+            'Median': float(series.median()),
+            'Max': float(series.max()),
+            'Skew': float(series.skew() if series.count() > 0 else 0.0),
+            'Kurtosis': float(series.kurtosis() if series.count() > 0 else 0.0),
+        }
+    else:
+        dist_fig = create_categorical_graph(transformed_data, transformed_col)
+        series = transformed_data[transformed_col].astype(str)
+        vc = series.value_counts()
+        top_label = vc.index[0] if len(vc) else '—'
+        top_count = int(vc.iloc[0]) if len(vc) else 0
+        metrics = {
+            'Count': int(series.shape[0]),
+            'Missing %': float(series.isna().mean() * 100),
+            'Unique': int(series.nunique()),
+            'Top': str(top_label),
+            'Top Freq': int(top_count),
+        }
+
+    # Build layout: Distribution (left), Metrics (right)
+    return html.Div([
+        html.Div([
+            html.Div([
+                html.Div(
+                    f"Distribution: {transformed_col}",
+                    className="card-header fw-semibold",
+                    style={"backgroundColor": COLORS['card_background_color']}
+                ),
+                html.Div([
+                    dcc.Graph(figure=dist_fig, config={'displayModeBar': False})
+                ], className="card-body p-2")
+            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+        ], className="col-12 col-lg-8 mb-3"),
+
+        html.Div([
+            html.Div([
+                html.Div(
+                    "Metrics",
+                    className="card-header fw-semibold",
+                    style={"backgroundColor": COLORS['card_background_color']}
+                ),
+                html.Div([
+                    dash_table.DataTable(
+                        columns=[{"name": "Metric", "id": "Metric"}, {"name": "Value", "id": "Value"}],
+                        data=[{"Metric": k, "Value": (f"{v:.3f}" if isinstance(v, float) else v)} for k, v in metrics.items()],
+                        style_header={
+                            'backgroundColor': COLORS['header'],
+                            'color': COLORS['text_light'],
+                            'fontWeight': 'bold',
+                            'fontFamily': 'Inter, system-ui',
+                            'fontSize': '14px',
+                            'textAlign': 'center',
+                            'border': '1px solid #ddd'
+                        },
+                        style_cell={
+                            'textAlign': 'left',
+                            'padding': '8px',
+                            'fontFamily': 'Inter, system-ui',
+                            'fontSize': '13px',
+                            'border': '1px solid #ddd',
+                            'minWidth': '100px'
+                        },
+                        style_data={
+                            'backgroundColor': COLORS['bg_main'],
+                            'color': COLORS['text_primary']
+                        },
+                        style_data_conditional=[
+                            {
+                                'if': {'row_index': 'odd'},
+                                'backgroundColor': COLORS['card_background_color']
+                            }
+                        ],
+                        page_size=10
+                    )
+                ], className="card-body p-2")
+            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+        ], className="col-12 col-lg-4 mb-3"),
+    ], className="row g-3 align-items-stretch mb-3")
+
 def create_correlation_matrix(df):
     """Create a correlation matrix heatmap for numeric columns"""
     # Select only numeric columns
@@ -1361,20 +1471,19 @@ def create_correlation_matrix(df):
     return fig
 
 def build_dashboard_layout():
-    """Build rows for model-used features only"""
-    rows = []
-    for orig_col, trans_col in FEATURE_MAP.items():
-        if orig_col in original_data.columns and trans_col in transformed_data.columns:
-            rows.append(build_column_row(orig_col, trans_col))
-    return rows
+    """Deprecated: previously built comparison rows. No longer used."""
+    return []
 
 def build_data_tab_content():
-    """Build the entire Data tab content limited to model-used features"""
-    # Restrict dropdown to original feature names used by models
-    columns = [col for col in FEATURE_MAP.keys() if col in original_data.columns]
+    """Build Data tab to focus on post-processed (model-used) data only.
+    Shows per-column distribution and metrics for all columns in transformed_data,
+    plus a correlation matrix. No transformation notes.
+    """
+    # Allow selection of any column present in transformed_data
+    columns = [col for col in transformed_data.columns]
 
     return html.Div([
-        # Column selector dropdown
+        # Selector
         html.Div([
             html.Div([
                 html.Label(
@@ -1386,61 +1495,28 @@ def build_data_tab_content():
                     id='column-selector',
                     options=[{'label': col, 'value': col} for col in columns],
                     value=columns[0] if columns else None,
-                    style={
-                        'width': '300px',
-                        'fontFamily': 'Inter, system-ui'
-                    }
+                    style={'width': '300px', 'fontFamily': 'Inter, system-ui'}
                 )
-            ], style={
-                'display': 'flex',
-                'alignItems': 'center',
-                'gap': '10px',
-                'marginBottom': '20px'
-            })
-        ], className="row mb-3"),
+            ], style={'display': 'flex', 'alignItems': 'center', 'gap': '10px', 'marginBottom': '10px'})
+        ], className="row mb-2"),
 
-        # Column headers
-        html.Div([
-            html.Div([
-                html.Div(
-                    "Raw Data",
-                    className="text-center fw-bold",
-                    style={'fontFamily': 'Inter, system-ui', 'color': COLORS['header'], 'fontSize': '42px'}
-                )
-            ], className="col-12 col-lg-4"),
-            html.Div([
-                html.Div(
-                    "Transformation Notes",
-                    className="text-center fw-bold",
-                    style={'fontFamily': 'Inter, system-ui', 'color': COLORS['header'], 'fontSize': '42px'}
-                )
-            ], className="col-12 col-lg-4"),
-            html.Div([
-                html.Div(
-                    "Transformed Data",
-                    className="text-center fw-bold",
-                    style={'fontFamily': 'Inter, system-ui', 'color': COLORS['header'], 'fontSize': '42px'}
-                )
-            ], className="col-12 col-lg-4")
-        ], className="row g-3 mb-3 pb-2", style={'borderBottom': COLORS['border_light']}),
+        # Visualization + Metrics for selected column
+        html.Div(id='column-visualization', children=[]),
 
-        # Rows for model-used features
-        html.Div(build_dashboard_layout(), className="dashboard-rows"),
-        
-        # Data table section at the bottom
+        # Raw data table for transformed data at the bottom
         html.Div([
             html.Div([
                 html.Div([
                     html.Div(
-                        "Original Dataset",
+                        "Post-Processed Dataset (Used for Modeling)",
                         className="card-header fw-semibold",
                         style={"backgroundColor": COLORS['card_background_color']}
                     ),
                     html.Div([
                         dash_table.DataTable(
-                            id='data-table',
-                            columns=[{"name": col, "id": col} for col in original_data.columns],
-                            data=original_data.to_dict('records'),
+                            id='transformed-data-table',
+                            columns=[{"name": col, "id": col} for col in transformed_data.columns],
+                            data=transformed_data.to_dict('records'),
                             page_size=10,
                             style_table={
                                 'overflowX': 'auto',
@@ -1483,9 +1559,9 @@ def build_data_tab_content():
                     ], className="card-body p-3")
                 ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
             ], className="col-12")
-        ], className="row mt-5 mb-4"),
-        
-        # Correlation matrix section
+        ], className="row mt-4 mb-4"),
+
+        # Correlation matrix section (transformed data only)
         html.Div([
             html.Div([
                 html.Div([
@@ -1844,8 +1920,8 @@ def update_column_visualization(selected_column):
     if selected_column is None:
         return html.Div("Please select a column", style={'textAlign': 'center', 'padding': '20px'})
     
-    # Build and return only the selected column's visualization
-    return build_column_row(selected_column)
+    # Build and return selected column's transformed-data visualization
+    return build_column_detail(selected_column)
 
 # =====================
 # Models: Callbacks
