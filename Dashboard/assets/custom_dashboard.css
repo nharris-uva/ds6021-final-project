@@ -1,4 +1,4 @@
-/* Custom Dashboard CSS extracted from app.index_string */
+/* Unified Dashboard Theme */
 :root {
     --hue-primary: 223;
     --hue-secondary: 178;
@@ -19,89 +19,81 @@
     --card-header-bg-dark: #0f172a;
     --card-header-text-dark: #e5e7eb;
     --card-header-border-dark: #1f2937;
+    --bg-main: #FFFFFE;
+    --text-primary: #222222;
+    --text-secondary: #333333;
+    --accent: #FF8E3C;
 }
 
-.glass-card {
-    backdrop-filter: blur(4px) !important;
-    -webkit-backdrop-filter: blur(4px) !important;
-    background: #ffffff1a !important;
-    border: 1px solid #ffffff40 !important;
-    border-radius: 1em !important;
-    position: relative !important;
-    overflow: visible !important;
-    box-shadow: 0 8px 32px 0 #00000020 !important;
+/* Apply lightweight theme to all cards for consistency and performance */
+.card {
+    background: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 12px !important;
+    box-shadow: none !important;
 }
-
-.glass-card::before {
-    content: "" !important;
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    border-radius: 1em !important;
-    padding: 1px !important;
-    background: linear-gradient(135deg, #ffffff80, #ffffff00) !important;
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0) !important;
-    -webkit-mask-composite: xor !important;
-    mask-composite: exclude !important;
-    pointer-events: none !important;
-    z-index: 0 !important;
+.card::before,
+.card::after {
+    display: none !important;
+    content: none !important;
 }
-
-.glass-card::after {
-    content: "" !important;
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    border-radius: 1em !important;
-    padding: 1px !important;
-    background: linear-gradient(135deg, #ffffff00, #ffffff40) !important;
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0) !important;
-    -webkit-mask-composite: xor !important;
-    mask-composite: exclude !important;
-    pointer-events: none !important;
-    z-index: 0 !important;
-}
-
-.glass-card .card-header {
+.card .card-header {
     background: var(--card-header-bg-light) !important;
     color: var(--card-header-text-light) !important;
     font-weight: 600 !important;
-    position: relative !important;
-    z-index: 2 !important;
     border-top-left-radius: 1em !important;
     border-top-right-radius: 1em !important;
     border-bottom: 1px solid var(--card-header-border-light) !important;
     padding: 0.75rem 1rem !important;
 }
-
-.glass-card .card-body {
-    position: relative !important;
-    z-index: 2 !important;
+.card .card-body {
     color: #333333 !important;
-    background: transparent !important;
+    background: #ffffff !important;
 }
-
-.glass-card .card-body * {
+.card .card-body * {
     color: #333333 !important;
 }
-
-.glass-card .card-body h1,
-.glass-card .card-body h2,
-.glass-card .card-body h3,
-.glass-card .card-body h4,
-.glass-card .card-body h5,
-.glass-card .card-body h6,
-.glass-card .card-body strong,
-.glass-card .card-body b {
+.card .card-body h1,
+.card .card-body h2,
+.card .card-body h3,
+.card .card-body h4,
+.card .card-body h5,
+.card .card-body h6,
+.card .card-body strong,
+.card .card-body b {
     color: #1a1a1a !important;
     font-weight: 600 !important;
 }
-
-.glass-card .card-body p,
-.glass-card .card-body li {
+.card .card-body p,
+.card .card-body li {
     color: #444444 !important;
+}
+
+/* Tab theming alignment */
+.custom-tab {
+    background: #f5f5f7 !important;
+    color: var(--text-secondary) !important;
+    border: 1px solid #e5e7eb !important;
+    border-bottom: none !important;
+    border-radius: 8px 8px 0 0 !important;
+}
+.custom-tab--selected {
+    background: #ffffff !important;
+    color: var(--text-primary) !important;
+    border-color: #e5e7eb !important;
+}
+
+/* Neutralize animated glider from inline index_string for performance */
+.custom-tabs::after,
+.custom-tabs[data-active="summary-tab"]::after,
+.custom-tabs[data-active="models-tab"]::after,
+.custom-tabs[data-active="data-tab"]::after {
+    display: none !important;
+    content: none !important;
+}
+
+/* App container baseline */
+#app-container {
+    background: var(--bg-main) !important;
+    color: var(--text-primary) !important;
 }

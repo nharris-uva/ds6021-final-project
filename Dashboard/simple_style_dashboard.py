@@ -51,7 +51,7 @@ raw_data = pd.read_csv("New Data and Work/final_movie_table.csv")
 app = dash.Dash(
     __name__,
     external_stylesheets=[BOOTSTRAP_CSS, GOOGLE_FONTS],
-    include_assets_files=False,
+    include_assets_files=True,
     suppress_callback_exceptions=True
 )
 
@@ -64,6 +64,19 @@ TRANSFORMATION_NOTES = {
     # Add your transformation notes here
     # Example: "budget": "Applied log transformation to reduce skewness\nReplaced 0 values with NaN"
 }
+
+# Unified Plotly theming
+def apply_fig_theme(fig, *, height=None):
+    layout_updates = {
+        'margin': DEFAULT_FIG_MARGIN,
+        'plot_bgcolor': COLORS['bg_transparent'],
+        'paper_bgcolor': COLORS['bg_transparent'],
+        'font': dict(color=COLORS['text_primary'])
+    }
+    if height is not None:
+        layout_updates['height'] = height
+    fig.update_layout(**layout_updates)
+    return fig
 
 # =====================
 # Models: Data & Helpers
@@ -365,8 +378,7 @@ def build_comparison_section(knn_rmse=None, mlp_train_rmse=None, mlp_valid_rmse=
             html.Div([
                 html.Div(
                     "Model Performance Comparison",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div([
                     dash_table.DataTable(
@@ -399,14 +411,13 @@ def build_comparison_section(knn_rmse=None, mlp_train_rmse=None, mlp_valid_rmse=
                         ]
                     )
                 ], className="card-body p-3")
-            ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card")
         ], className="col-12 mb-4"),
         html.Div([
             html.Div([
                 html.Div(
                     "Key Conclusions",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div([
                     html.H5("Model Performance Rankings:", className="fw-bold mt-3"),
@@ -433,7 +444,7 @@ def build_comparison_section(knn_rmse=None, mlp_train_rmse=None, mlp_valid_rmse=
                         html.Li("The dataset exhibits meaningful local structure that distance-based and neural approaches can exploit"),
                     ])
                 ], className="card-body")
-            ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card")
         ], className="col-12")
     ], className="row g-3")
 
@@ -454,8 +465,7 @@ def build_linear_regression_section(ols_model):
             html.Div([
                 html.Div(
                     "Linear Regression Analysis with Categorical Features",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div([
                     html.P(
@@ -487,14 +497,13 @@ def build_linear_regression_section(ols_model):
                         ])
                     ])
                 ], className="card-body")
-            ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card")
         ], className="col-12 mb-3"),
         html.Div([
             html.Div([
                 html.Div(
                     "OLS Regression Results",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div([
                     dash_table.DataTable(
@@ -530,7 +539,7 @@ def build_linear_regression_section(ols_model):
                         page_size=10
                     )
                 ], className="card-body p-3", style={'maxHeight': '600px', 'overflowY': 'auto'})
-            ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card")
         ], className="col-12")
     ], className="row mb-3")
 
@@ -541,46 +550,30 @@ def build_knn_section(knn_importance, knn_rmse, k_values, rmse_curve, rmse_curve
         markers=True,
         labels={'x': 'k', 'y': 'Validation RMSE'},
         title='KNN Validation RMSE by k (baseline)'
-    ).update_traces(line=dict(color=COLORS['graph_bg']), marker=dict(size=8)).update_layout(
-        height=360,
-        margin=DEFAULT_FIG_MARGIN,
-        plot_bgcolor=COLORS['bg_transparent'],
-        paper_bgcolor=COLORS['bg_transparent'],
-        font=dict(color=COLORS['text_primary'])
-    )
+    ).update_traces(line=dict(color=COLORS['graph_bg']), marker=dict(size=8))
+    fig_rmse = apply_fig_theme(fig_rmse, height=360)
     fig_rmse_tuned = px.line(
         x=k_values,
         y=rmse_curve_tuned,
         markers=True,
         labels={'x': 'k', 'y': 'Validation RMSE'},
         title='Tuned KNN Validation RMSE by k'
-    ).update_traces(line=dict(color=COLORS['header']), marker=dict(size=8)).update_layout(
-        height=360,
-        margin=DEFAULT_FIG_MARGIN,
-        plot_bgcolor=COLORS['bg_transparent'],
-        paper_bgcolor=COLORS['bg_transparent'],
-        font=dict(color=COLORS['text_primary'])
-    )
+    ).update_traces(line=dict(color=COLORS['header']), marker=dict(size=8))
+    fig_rmse_tuned = apply_fig_theme(fig_rmse_tuned, height=360)
     fig_corr = px.bar(
         corr_df,
         x='feature',
         y='correlation_with_knn_pred',
         title='Feature Correlation with KNN Predictions'
-    ).update_layout(
-        height=360,
-        margin=DEFAULT_FIG_MARGIN,
-        plot_bgcolor=COLORS['bg_transparent'],
-        paper_bgcolor=COLORS['bg_transparent'],
-        font=dict(color=COLORS['text_primary']),
-        xaxis_tickangle=45
     )
+    fig_corr.update_layout(xaxis_tickangle=45)
+    fig_corr = apply_fig_theme(fig_corr, height=360)
     return html.Div([
         html.Div([
             html.Div([
                 html.Div(
                     f"KNN Model (Tuned) - Validation RMSE: {knn_rmse:.4f}",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div([
                     dcc.Graph(
@@ -602,27 +595,25 @@ def build_knn_section(knn_importance, knn_rmse, k_values, rmse_curve, rmse_curve
                         config={'displayModeBar': False}
                     )
                 ], className="card-body p-2")
-            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card h-100")
         ], className="col-12 col-xl-4 mb-3"),
         html.Div([
             html.Div([
                 html.Div(
                     "KNN Validation Curves",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div([
                     dcc.Graph(figure=fig_rmse, config={'displayModeBar': False}),
                     dcc.Graph(figure=fig_rmse_tuned, config={'displayModeBar': False})
                 ], className="card-body p-2")
-            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card h-100")
         ], className="col-12 col-xl-4 mb-3"),
         html.Div([
             html.Div([
                 html.Div(
                     "KNN Performance Summary",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div([
                     html.P(
@@ -650,19 +641,18 @@ def build_knn_section(knn_importance, knn_rmse, k_values, rmse_curve, rmse_curve
                         ])
                     ])
                 ], className="card-body")
-            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card h-100")
         ], className="col-12 col-xl-4 mb-3"),
         html.Div([
             html.Div([
                 html.Div(
                     "Feature Correlation with KNN Predictions",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div([
                     dcc.Graph(figure=fig_corr, config={'displayModeBar': False})
                 ], className="card-body p-2")
-            ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card")
         ], className="col-12 mb-3")
     ], className="row g-3")
 
@@ -687,13 +677,8 @@ def build_clustering_section(X_pca, pca_clusters, k_values, silhouette_list, df_
         color_continuous_scale='Viridis',
         opacity=0.6,
         title='Tuned K-Means Clusters in PCA Space'
-    ).update_traces(marker=dict(size=5)).update_layout(
-        height=400,
-        margin=DEFAULT_FIG_MARGIN,
-        plot_bgcolor=COLORS['bg_transparent'],
-        paper_bgcolor=COLORS['bg_transparent'],
-        font=dict(color=COLORS['text_primary'])
-    )
+    ).update_traces(marker=dict(size=5))
+    fig_pca = apply_fig_theme(fig_pca, height=400)
     fig_pca3d = px.scatter_3d(
         df_pca3_plot,
         x='PC1', y='PC2', z='PC3',
@@ -701,98 +686,70 @@ def build_clustering_section(X_pca, pca_clusters, k_values, silhouette_list, df_
         color_continuous_scale='Viridis',
         title='Tuned K-Means Clusters in 3D PCA Space',
         opacity=0.6
-    ).update_traces(marker=dict(size=4)).update_layout(
-        height=420,
-        margin=DEFAULT_FIG_MARGIN,
-        plot_bgcolor=COLORS['bg_transparent'],
-        paper_bgcolor=COLORS['bg_transparent'],
-        font=dict(color=COLORS['text_primary'])
-    )
+    ).update_traces(marker=dict(size=4))
+    fig_pca3d = apply_fig_theme(fig_pca3d, height=420)
     fig_silhouette = px.line(
         x=list(k_values),
         y=silhouette_list,
         markers=True,
         labels={'x': 'k', 'y': 'Silhouette Score'},
         title='Silhouette Scores by k'
-    ).update_traces(line=dict(color=COLORS['graph_bg']), marker=dict(size=8)).update_layout(
-        height=320,
-        margin=DEFAULT_FIG_MARGIN,
-        plot_bgcolor=COLORS['bg_transparent'],
-        paper_bgcolor=COLORS['bg_transparent'],
-        font=dict(color=COLORS['text_primary']),
-        showlegend=False
-    )
+    ).update_traces(line=dict(color=COLORS['graph_bg']), marker=dict(size=8))
+    fig_silhouette.update_layout(showlegend=False)
+    fig_silhouette = apply_fig_theme(fig_silhouette, height=320)
     fig_inertia = px.line(
         x=list(k_values),
         y=inertia_list,
         markers=True,
         labels={'x': 'k', 'y': 'Inertia'},
         title='Inertia by Number of Clusters'
-    ).update_traces(line=dict(color=COLORS['header']), marker=dict(size=8)).update_layout(
-        height=320,
-        margin=DEFAULT_FIG_MARGIN,
-        plot_bgcolor=COLORS['bg_transparent'],
-        paper_bgcolor=COLORS['bg_transparent'],
-        font=dict(color=COLORS['text_primary']),
-        showlegend=False
-    )
+    ).update_traces(line=dict(color=COLORS['header']), marker=dict(size=8))
+    fig_inertia.update_layout(showlegend=False)
+    fig_inertia = apply_fig_theme(fig_inertia, height=320)
     cluster_profiles_melted = cluster_profiles.melt(id_vars='cluster', var_name='feature', value_name='value')
     fig_profiles = px.bar(
         cluster_profiles_melted,
         x='feature', y='value', color='cluster', barmode='group',
         title='Cluster Profiles: Average Scaled Feature Values'
-    ).update_layout(
-        height=360,
-        margin=DEFAULT_FIG_MARGIN,
-        plot_bgcolor=COLORS['bg_transparent'],
-        paper_bgcolor=COLORS['bg_transparent'],
-        font=dict(color=COLORS['text_primary']),
-        xaxis_tickangle=45
     )
+    fig_profiles.update_layout(xaxis_tickangle=45)
+    fig_profiles = apply_fig_theme(fig_profiles, height=360)
     fig_box = px.box(
         df_clusters,
         x='cluster', y='vote_average',
         title='Vote Average by Tuned Cluster (k = 4)',
         labels={'cluster': 'Cluster', 'vote_average': 'Vote Average'}
-    ).update_layout(
-        height=360,
-        margin=DEFAULT_FIG_MARGIN,
-        plot_bgcolor=COLORS['bg_transparent'],
-        paper_bgcolor=COLORS['bg_transparent'],
-        font=dict(color=COLORS['text_primary'])
     )
+    fig_box = apply_fig_theme(fig_box, height=360)
     return html.Div([
         html.Div([
             html.Div([
                 html.Div(
                     "K-Means Clustering Analysis",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div([
                     dcc.Graph(figure=fig_pca, config={'displayModeBar': False})
                 ], className="card-body p-2")
-            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card h-100")
         ], className="col-12 col-xl-6 mb-3"),
         html.Div([
             html.Div([
                 html.Div(
                     "Clustering Tuning Diagnostics",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div([
                     dcc.Graph(figure=fig_silhouette, config={'displayModeBar': False}),
                     dcc.Graph(figure=fig_inertia, config={'displayModeBar': False})
                 ], className="card-body p-2")
-            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card h-100")
         ], className="col-12 col-xl-6 mb-3"),
         html.Div([
             html.Div([
                 html.Div(
                     "3D PCA View of Clusters",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div([
                     dcc.Graph(figure=fig_pca3d, config={'displayModeBar': False})
@@ -832,20 +789,14 @@ def build_mlp_section(mlp_importance, mlp_train_rmse, mlp_valid_rmse, loss_curve
         markers=True,
         labels={'x': 'Iteration', 'y': 'Training Loss'},
         title='MLP Training Loss Curve'
-    ).update_traces(mode='lines+markers', line=dict(color=COLORS['graph_bg'])).update_layout(
-        height=360,
-        margin=DEFAULT_FIG_MARGIN,
-        plot_bgcolor=COLORS['bg_transparent'],
-        paper_bgcolor=COLORS['bg_transparent'],
-        font=dict(color=COLORS['text_primary'])
-    )
+    ).update_traces(mode='lines+markers', line=dict(color=COLORS['graph_bg']))
+    fig_loss = apply_fig_theme(fig_loss, height=360)
     return html.Div([
         html.Div([
             html.Div([
                 html.Div(
                     f"MLP Regression (Tuned) - Valid RMSE: {mlp_valid_rmse:.4f}",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div([
                     dcc.Graph(
@@ -867,26 +818,24 @@ def build_mlp_section(mlp_importance, mlp_train_rmse, mlp_valid_rmse, loss_curve
                         config={'displayModeBar': False}
                     )
                 ], className="card-body p-2")
-            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card h-100")
         ], className="col-12 col-xl-4 mb-3"),
         html.Div([
             html.Div([
                 html.Div(
                     "MLP Training Dynamics",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div([
                     dcc.Graph(figure=fig_loss, config={'displayModeBar': False})
                 ], className="card-body p-2")
-            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card h-100")
         ], className="col-12 col-xl-4 mb-3"),
         html.Div([
             html.Div([
                 html.Div(
                     "MLP Performance Summary",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div([
                     html.P(
@@ -915,7 +864,7 @@ def build_mlp_section(mlp_importance, mlp_train_rmse, mlp_valid_rmse, loss_curve
                         ])
                     ])
                 ], className="card-body")
-            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card h-100")
         ], className="col-12 col-xl-4 mb-3")
     ], className="row g-3")
 
@@ -933,14 +882,9 @@ def build_pca_section():
         labels={'x': 'Principal Component', 'y': 'Variance Explained'},
         title='Scree Plot: Variance by Component',
         color_discrete_sequence=[COLORS['graph_bg']]
-    ).update_layout(
-        height=360,
-        margin=DEFAULT_FIG_MARGIN,
-        plot_bgcolor=COLORS['bg_transparent'],
-        paper_bgcolor=COLORS['bg_transparent'],
-        font=dict(color=COLORS['text_primary']),
-        showlegend=False
     )
+    fig_scree.update_layout(showlegend=False)
+    fig_scree = apply_fig_theme(fig_scree, height=360)
     fig_cum = px.line(
         x=list(range(1, len(cum_var) + 1)),
         y=cum_var,
@@ -952,14 +896,9 @@ def build_pca_section():
         line_dash='dash',
         line_color='red',
         annotation_text='80% threshold'
-    ).update_layout(
-        height=360,
-        margin=DEFAULT_FIG_MARGIN,
-        plot_bgcolor=COLORS['bg_transparent'],
-        paper_bgcolor=COLORS['bg_transparent'],
-        font=dict(color=COLORS['text_primary']),
-        showlegend=False
     )
+    fig_cum.update_layout(showlegend=False)
+    fig_cum = apply_fig_theme(fig_cum, height=360)
     loadings = pd.DataFrame(
         pca_full.components_.T,
         columns=[f'PC{i+1}' for i in range(len(explained_var))],
@@ -969,27 +908,17 @@ def build_pca_section():
         loadings[['PC1', 'PC2', 'PC3']].reset_index().melt(id_vars='index', var_name='Component', value_name='Loading'),
         x='index', y='Loading', color='Component', barmode='group',
         title="PCA Loadings for First Three Components"
-    ).update_layout(
-        height=360,
-        margin=DEFAULT_FIG_MARGIN,
-        plot_bgcolor=COLORS['bg_transparent'],
-        paper_bgcolor=COLORS['bg_transparent'],
-        font=dict(color=COLORS['text_primary']),
-        xaxis_tickangle=45
     )
+    fig_loadings.update_layout(xaxis_tickangle=45)
+    fig_loadings = apply_fig_theme(fig_loadings, height=360)
     X_pca2 = X_scaled @ pca_full.components_.T[:, :2]
     df_pca2 = pd.DataFrame({'PC1': X_pca2[:, 0], 'PC2': X_pca2[:, 1], 'vote_average': df_num_models['vote_average'].values})
     fig_pca2 = px.scatter(
         df_pca2,
         x='PC1', y='PC2', color='vote_average', color_continuous_scale='Viridis',
         title='Movies Projected onto PC1 & PC2 (Colored by Vote Average)', opacity=0.6
-    ).update_traces(marker=dict(size=6)).update_layout(
-        height=360,
-        margin=DEFAULT_FIG_MARGIN,
-        plot_bgcolor=COLORS['bg_transparent'],
-        paper_bgcolor=COLORS['bg_transparent'],
-        font=dict(color=COLORS['text_primary'])
-    )
+    ).update_traces(marker=dict(size=6))
+    fig_pca2 = apply_fig_theme(fig_pca2, height=360)
     pca3 = PCA(n_components=3)
     X_pca3 = pca3.fit_transform(X_scaled)
     df_pca3 = pd.DataFrame({'PC1': X_pca3[:, 0], 'PC2': X_pca3[:, 1], 'PC3': X_pca3[:, 2], 'vote_average': df_num_models['vote_average'].values})
@@ -1001,72 +930,64 @@ def build_pca_section():
     fig_pca3.update_layout(
         title='3D PCA Projection Colored by Vote Average',
         scene=dict(xaxis_title='PC1', yaxis_title='PC2', zaxis_title='PC3'),
-        height=520,
-        margin=DEFAULT_FIG_MARGIN,
-        plot_bgcolor=COLORS['bg_transparent'],
-        paper_bgcolor=COLORS['bg_transparent'],
-        font=dict(color=COLORS['text_primary'])
+        height=520
     )
+    fig_pca3 = apply_fig_theme(fig_pca3, height=520)
     return html.Div([
         html.Div([
             html.Div([
                 html.Div(
                     "PCA: Variance Explained",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div([
                     dcc.Graph(figure=fig_scree, config={'displayModeBar': False})
                 ], className="card-body p-2")
-            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card h-100")
         ], className="col-12 col-xl-6 mb-3"),
         html.Div([
             html.Div([
                 html.Div(
                     "PCA: Cumulative Variance",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div([
                     dcc.Graph(figure=fig_cum, config={'displayModeBar': False})
                 ], className="card-body p-2")
-            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card h-100")
         ], className="col-12 col-xl-6 mb-3"),
         html.Div([
             html.Div([
                 html.Div(
                     "PCA Loadings",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div([
                     dcc.Graph(figure=fig_loadings, config={'displayModeBar': False})
                 ], className="card-body p-2")
-            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card h-100")
         ], className="col-12 col-xl-6 mb-3"),
         html.Div([
             html.Div([
                 html.Div(
                     "PCA Projection (2D)",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div([
                     dcc.Graph(figure=fig_pca2, config={'displayModeBar': False})
                 ], className="card-body p-2")
-            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card h-100")
         ], className="col-12 col-xl-6 mb-3"),
         html.Div([
             html.Div([
                 html.Div(
                     "PCA Projection (3D)",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div([
                     dcc.Graph(figure=fig_pca3, config={'displayModeBar': False})
                 ], className="card-body p-2")
-            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card h-100")
         ], className="col-12")
     ], className="row g-3")
 
@@ -1091,18 +1012,10 @@ def get_column_type(df, col):
 def create_numeric_graph(df, col, title_prefix=""):
     """Create histogram with box plot for numeric columns"""
     fig = px.histogram(df, x=col, marginal="box", opacity=0.9, color_discrete_sequence=[COLORS['graph_bg']])
-    fig.update_layout(
-        title_text=None,
-        height=420,
-        margin=DEFAULT_FIG_MARGIN,
-        showlegend=False,
-        plot_bgcolor=COLORS['bg_transparent'],
-        paper_bgcolor=COLORS['bg_transparent'],
-        font=dict(color=COLORS['text_primary'], size=14),
-        xaxis=dict(title_font=dict(color=COLORS['text_primary'], size=16), tickfont=dict(color=COLORS['text_primary'], size=12)),
-        yaxis=dict(title_font=dict(color=COLORS['text_primary'], size=16), tickfont=dict(color=COLORS['text_primary'], size=12))
-    )
-    return fig
+    fig.update_layout(title_text=None, showlegend=False,
+                      xaxis=dict(title_font=dict(color=COLORS['text_primary'], size=16), tickfont=dict(color=COLORS['text_primary'], size=12)),
+                      yaxis=dict(title_font=dict(color=COLORS['text_primary'], size=16), tickfont=dict(color=COLORS['text_primary'], size=12)))
+    return apply_fig_theme(fig, height=420)
 
 def create_categorical_graph(df, col, title_prefix=""):
     """Create bar chart for categorical columns showing top 15 most frequent occurrences"""
@@ -1126,21 +1039,11 @@ def create_categorical_graph(df, col, title_prefix=""):
         hovertext=original_labels,
         hovertemplate="%{hovertext}: %{y}<extra></extra>"
     )
-    fig.update_layout(
-        title_text=None,
-        xaxis_title=col,
-        yaxis_title='Count',
-        height=420,
-        margin=DEFAULT_FIG_MARGIN,
-        showlegend=False,
-        plot_bgcolor=COLORS['bg_transparent'],
-        paper_bgcolor=COLORS['bg_transparent'],
-        font=dict(color=COLORS['text_primary'], size=14),
-        xaxis=dict(title_font=dict(color=COLORS['text_primary'], size=16), tickfont=dict(color=COLORS['text_primary'], size=12)),
-        yaxis=dict(title_font=dict(color=COLORS['text_primary'], size=16), tickfont=dict(color=COLORS['text_primary'], size=12))
-    )
+    fig.update_layout(title_text=None, xaxis_title=col, yaxis_title='Count', showlegend=False,
+                      xaxis=dict(title_font=dict(color=COLORS['text_primary'], size=16), tickfont=dict(color=COLORS['text_primary'], size=12)),
+                      yaxis=dict(title_font=dict(color=COLORS['text_primary'], size=16), tickfont=dict(color=COLORS['text_primary'], size=12)))
     fig.update_xaxes(tickangle=-30)
-    return fig
+    return apply_fig_theme(fig, height=420)
 
 def create_text_placeholder(col):
     """Create placeholder for text columns that can't be visualized"""
@@ -1151,14 +1054,8 @@ def create_text_placeholder(col):
         x=0.5, y=0.5, showarrow=False,
         font=dict(size=14, family="Inter, system-ui", color=COLORS['text_primary'])
     )
-    fig.update_layout(
-        height=420,
-        margin=DEFAULT_FIG_MARGIN,
-        xaxis=dict(visible=False),
-        yaxis=dict(visible=False),
-        font=dict(color=COLORS['text_primary'], size=14)
-    )
-    return fig
+    fig.update_layout(xaxis=dict(visible=False), yaxis=dict(visible=False), font=dict(color=COLORS['text_primary'], size=14))
+    return apply_fig_theme(fig, height=420)
 
 def create_missingness_bar(col: str):
     """Create a stacked bar chart showing % missing vs present in transformed data."""
@@ -1188,36 +1085,14 @@ def create_missingness_bar(col: str):
     )
     fig.update_layout(
         title=None,
-        height=140,
-        margin=dict(l=10, r=10, t=30, b=10),
         barmode="stack",
         showlegend=True,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.05,
-            xanchor="center",
-            x=0.5,
-            font=dict(size=10),
-        ),
-        plot_bgcolor=COLORS['bg_transparent'],
-        paper_bgcolor=COLORS['bg_transparent'],
+        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5, font=dict(size=10)),
         font=dict(color=COLORS['text_primary'], size=12),
-        xaxis=dict(
-            title=None,
-            tickfont=dict(size=11),
-            automargin=True,
-        ),
-        yaxis=dict(
-            title="Percentage %",
-            range=[0, 100],
-            tick0=0,
-            dtick=20,
-            tickfont=dict(size=11),
-            automargin=True,
-        ),
+        xaxis=dict(title=None, tickfont=dict(size=11), automargin=True),
+        yaxis=dict(title="Percentage %", range=[0, 100], tick0=0, dtick=20, tickfont=dict(size=11), automargin=True),
     )
-    return fig
+    return apply_fig_theme(fig, height=140)
 
 def build_column_row(original_col: str, transformed_col: str):
     """Build a single row comparing original vs transformed features used in models"""
@@ -1241,8 +1116,7 @@ def build_column_row(original_col: str, transformed_col: str):
             html.Div([
                 html.Div(
                     f"Original: {original_col}",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div(
                     dcc.Graph(
@@ -1251,7 +1125,7 @@ def build_column_row(original_col: str, transformed_col: str):
                     ),
                     className="card-body p-2"
                 )
-            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card h-100")
         ], className="col-12 col-lg-4 mb-3"),
         
         # Middle card - Transformation notes + missingness
@@ -1259,8 +1133,7 @@ def build_column_row(original_col: str, transformed_col: str):
             html.Div([
                 html.Div(
                     f"Transformation: {original_col} → {transformed_col}",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div([
                     html.Div([
@@ -1283,7 +1156,7 @@ def build_column_row(original_col: str, transformed_col: str):
                         }
                     )
                 ], className="card-body")
-            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card h-100")
         ], className="col-12 col-lg-4 mb-3"),
         
         # Right card - Transformed data
@@ -1291,8 +1164,7 @@ def build_column_row(original_col: str, transformed_col: str):
             html.Div([
                 html.Div(
                     f"Transformed: {transformed_col}",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div(
                     dcc.Graph(
@@ -1301,7 +1173,7 @@ def build_column_row(original_col: str, transformed_col: str):
                     ),
                     className="card-body p-2"
                 )
-            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card h-100")
         ], className="col-12 col-lg-4 mb-3")
     ], className="row g-3 align-items-stretch mb-3")
     
@@ -1324,7 +1196,7 @@ def build_column_detail(selected_col: str):
                 html.Div([
                     html.P("Please select another column.")
                 ], className="card-body")
-            ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card")
         ])
 
     # Decide visualization type
@@ -1363,21 +1235,19 @@ def build_column_detail(selected_col: str):
             html.Div([
                 html.Div(
                     f"Distribution: {transformed_col}",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div([
                     dcc.Graph(figure=dist_fig, config={'displayModeBar': False})
                 ], className="card-body p-2")
-            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card h-100")
         ], className="col-12 col-lg-8 mb-3"),
 
         html.Div([
             html.Div([
                 html.Div(
                     "Metrics",
-                    className="card-header fw-semibold",
-                    style={"backgroundColor": COLORS['card_background_color']}
+                    className="card-header fw-semibold"
                 ),
                 html.Div([
                     dash_table.DataTable(
@@ -1413,7 +1283,7 @@ def build_column_detail(selected_col: str):
                         page_size=10
                     )
                 ], className="card-body p-2")
-            ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+            ], className="card h-100")
         ], className="col-12 col-lg-4 mb-3"),
     ], className="row g-3 align-items-stretch mb-3")
 
@@ -1509,8 +1379,7 @@ def build_data_tab_content():
                 html.Div([
                     html.Div(
                         "Post-Processed Dataset (Used for Modeling)",
-                        className="card-header fw-semibold",
-                        style={"backgroundColor": COLORS['card_background_color']}
+                        className="card-header fw-semibold"
                     ),
                     html.Div([
                         dash_table.DataTable(
@@ -1557,7 +1426,7 @@ def build_data_tab_content():
                             filter_action='native'
                         )
                     ], className="card-body p-3")
-                ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+                ], className="card")
             ], className="col-12")
         ], className="row mt-4 mb-4"),
 
@@ -1567,8 +1436,7 @@ def build_data_tab_content():
                 html.Div([
                     html.Div(
                         "Correlation Matrix (Transformed Data)",
-                        className="card-header fw-semibold",
-                        style={"backgroundColor": COLORS['card_background_color']}
+                        className="card-header fw-semibold"
                     ),
                     html.Div([
                         dcc.Graph(
@@ -1577,7 +1445,7 @@ def build_data_tab_content():
                             config={'displayModeBar': True}
                         )
                     ], className="card-body p-3")
-                ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+                ], className="card")
             ], className="col-12")
         ], className="row mt-4 mb-4")
     ])
@@ -1599,19 +1467,29 @@ app.layout = html.Div([
     html.Div([
         html.Div([
             html.Div([
-                html.Div("Data Transformation Dashboard", className="card-header fw-semibold"),
                 html.Div([
+                    html.H1(
+                        "Movie Ratings Predictive Modeling Dashboard",
+                        className="fw-semibold",
+                        style={
+                            'margin': '0',
+                            'fontFamily': 'Inter, system-ui',
+                            'color': COLORS['header']
+                        }
+                    ),
                     html.P(
-                        "Compare original vs transformed features and document your transformation steps.",
-                        className="mb-0",
+                        "Explore models, data insights, and summary for our analysis of movie ratings using machine learning techniques.",
                         style={
                             'fontFamily': 'Inter, system-ui',
                             'fontSize': '16px',
-                            'color': COLORS['text_secondary']
+                            'color': COLORS['text_secondary'],
+                            'marginTop': '8px',
+                            'marginBottom': '0'
                         }
                     )
-                ], className="card-body")
-            ], className="card", style={"backgroundColor": "rgba(0,0,0,0)", "boxShadow": "none"})
+                ], className="card-header", style={"backgroundColor": COLORS['card_background_color']}),
+                
+            ], className="card")
         ], className="col-12")
     ], className="row mb-4"),
 
@@ -1635,8 +1513,51 @@ app.layout = html.Div([
     # Tab content containers - all rendered at once, shown/hidden via CSS
     html.Div([
         html.Div(id='summary-content', children=[
-            html.H3("Summary", className="text-center mb-4", 
-                   style={'fontFamily': 'Inter, system-ui', 'color': COLORS['header']})
+            html.H3("Project Summary", className="text-center mb-4",
+                   style={'fontFamily': 'Inter, system-ui', 'color': COLORS['header']}),
+            html.Div([
+                html.Div([
+                    html.Div("About This Dashboard", className="card-header fw-semibold"),
+                    html.Div([
+                        html.P(
+                            "This dashboard explores movie data and predictive modeling for ratings. "
+                            "Use the Models tab to compare different algorithms and the Data tab to inspect features, distributions, and transformations.",
+                            className="mb-0",
+                            style={'fontFamily': 'Inter, system-ui', 'fontSize': '16px', 'color': COLORS['text_secondary']}
+                        )
+                    ], className="card-body")
+                ], className="card"),
+            ], className="mb-4"),
+
+            html.Div([
+                html.Div([
+                    html.Div("Group Members", className="card-header fw-semibold"),
+                    html.Div([
+                        html.Ul([
+                            html.Li("Member 1"),
+                            html.Li("Member 2"),
+                            html.Li("Member 3"),
+                            html.Li("Member 4")
+                        ], className="mb-0", style={'fontFamily': 'Inter, system-ui'})
+                    ], className="card-body")
+                ], className="card"),
+            ], className="mb-4"),
+
+            html.Div([
+                html.Div([
+                    html.Div("Dataset", className="card-header fw-semibold"),
+                    html.Div([
+                        html.P(
+                            [
+                                "You can download the dataset used in this project here: ",
+                                html.A("final_movie_table.csv", href="/download/final_movie_table", target="_blank")
+                            ],
+                            className="mb-0",
+                            style={'fontFamily': 'Inter, system-ui', 'fontSize': '16px'}
+                        )
+                    ], className="card-body")
+                ], className="card"),
+            ])
         ], style={'display': 'block'}),
         
         html.Div(id='models-content', children=[
@@ -1648,26 +1569,7 @@ app.layout = html.Div([
             dcc.Store(id='mlp-model-store'),
             dcc.Interval(id='interval-trigger', interval=500, n_intervals=0, max_intervals=10),
 
-            html.Div([
-                html.Div([
-                    html.Div([
-                        html.Div([
-                            html.Div(
-                                "Movie Rating Prediction: Model Analysis Dashboard",
-                                className="card-header fw-semibold"
-                            ),
-                            html.Div([
-                                html.P(
-                                    "Comprehensive analysis and comparison of multiple machine learning approaches for predicting movie ratings. "
-                                    "Includes linear regression, KNN, K-Means clustering, PCA dimensionality reduction, and neural networks.",
-                                    className="mb-0",
-                                    style={'fontFamily': 'Inter, system-ui', 'fontSize': '16px', 'color': COLORS['text_secondary']}
-                                )
-                            ], className="card-body")
-                        ], className="card", style={"backgroundColor": "rgba(0,0,0,0)", "boxShadow": "none"})
-                    ], className="col-12")
-                ], className="row mb-4")
-            ], className="container-fluid"),
+            
 
             html.Div([
                 html.Div([
@@ -1685,8 +1587,7 @@ app.layout = html.Div([
                                                 html.Div([
                                                     html.Div(
                                                         f"Loading Linear Regression...",
-                                                        className="card-header fw-semibold",
-                                                        style={"backgroundColor": COLORS['card_background_color']}
+                                                        className="card-header fw-semibold"
                                                     ),
                                                     html.Div([
                                                         html.Div([
@@ -1699,7 +1600,7 @@ app.layout = html.Div([
                                                                   style={"textAlign": "center", "marginTop": "20px"})
                                                         ])
                                                     ], className="card-body")
-                                                ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+                                                ], className="card")
                                             ])])
                                         ], className="col-12")
                                     ], className="row mb-4")
@@ -1715,8 +1616,7 @@ app.layout = html.Div([
                                                 html.Div([
                                                     html.Div(
                                                         f"Loading KNN...",
-                                                        className="card-header fw-semibold",
-                                                        style={"backgroundColor": COLORS['card_background_color']}
+                                                        className="card-header fw-semibold"
                                                     ),
                                                     html.Div([
                                                         html.Div([
@@ -1729,7 +1629,7 @@ app.layout = html.Div([
                                                                   style={"textAlign": "center", "marginTop": "20px"})
                                                         ])
                                                     ], className="card-body")
-                                                ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+                                                ], className="card")
                                             ])])
                                         ], className="col-12")
                                     ], className="row mb-4")
@@ -1745,8 +1645,7 @@ app.layout = html.Div([
                                                 html.Div([
                                                     html.Div(
                                                         f"Loading K-Means...",
-                                                        className="card-header fw-semibold",
-                                                        style={"backgroundColor": COLORS['card_background_color']}
+                                                        className="card-header fw-semibold"
                                                     ),
                                                     html.Div([
                                                         html.Div([
@@ -1759,7 +1658,7 @@ app.layout = html.Div([
                                                                   style={"textAlign": "center", "marginTop": "20px"})
                                                         ])
                                                     ], className="card-body")
-                                                ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+                                                ], className="card")
                                             ])])
                                         ], className="col-12")
                                     ], className="row mb-4")
@@ -1786,8 +1685,7 @@ app.layout = html.Div([
                                                 html.Div([
                                                     html.Div(
                                                         f"Loading MLP...",
-                                                        className="card-header fw-semibold",
-                                                        style={"backgroundColor": COLORS['card_background_color']}
+                                                        className="card-header fw-semibold"
                                                     ),
                                                     html.Div([
                                                         html.Div([
@@ -1800,17 +1698,13 @@ app.layout = html.Div([
                                                                   style={"textAlign": "center", "marginTop": "20px"})
                                                         ])
                                                     ], className="card-body")
-                                                ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+                                                ], className="card")
                                             ])])
                                         ], className="col-12")
                                     ], className="row mb-4")
                                 ]
                             )
-                        ],
-                        style={
-                            'borderBottom': '2px solid #eee',
-                            'marginBottom': '20px'
-                        }
+                        ]
                     )
                 ], className="col-12")
             ], className="row mb-4"),
@@ -1822,21 +1716,19 @@ app.layout = html.Div([
                             html.Div([
                                 html.Div(
                                     "Model Performance Comparison",
-                                    className="card-header fw-semibold",
-                                    style={"backgroundColor": COLORS['card_background_color']}
+                                    className="card-header fw-semibold"
                                 ),
                                 html.Div([
                                     html.P("Loading model results...", style={"textAlign": "center", "padding": "20px"})
                                 ], className="card-body p-3")
-                            ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+                            ], className="card")
                         ], className="col-12 mb-4"),
 
                         html.Div([
                             html.Div([
                                 html.Div(
                                     "Key Conclusions",
-                                    className="card-header fw-semibold",
-                                    style={"backgroundColor": COLORS['card_background_color']}
+                                    className="card-header fw-semibold"
                                 ),
                                 html.Div([
                                     html.H5("Model Performance Rankings:", className="fw-bold mt-3"),
@@ -1863,7 +1755,7 @@ app.layout = html.Div([
                                         html.Li("The dataset exhibits meaningful local structure that distance-based and neural approaches can exploit"),
                                     ])
                                 ], className="card-body")
-                            ], className="card", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
+                            ], className="card")
                         ], className="col-12")
                     ], className="row g-3")
                 ], className="col-12")
@@ -1884,6 +1776,14 @@ app.layout = html.Div([
     'fontFamily': 'Inter, system-ui'
 })
 
+# Route to allow dataset download from the app server
+import os
+from flask import send_file
+@app.server.route('/download/final_movie_table')
+def download_final_movie_table():
+    path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'New Data and Work', 'final_movie_table.csv')
+    return send_file(path, as_attachment=True)
+
 # Callbacks to handle tab switching
 @app.callback(
     [Output('summary-content', 'style'),
@@ -1897,6 +1797,27 @@ def toggle_tab_visibility(active_tab):
     models_style = {'display': 'block'} if active_tab == 'models-tab' else {'display': 'none'}
     data_style = {'display': 'block'} if active_tab == 'data-tab' else {'display': 'none'}
     return summary_style, models_style, data_style
+
+# Hero buttons: switch main tabs when clicked
+@app.callback(
+    Output('main-tabs', 'value'),
+    [Input('hero-summary-btn', 'n_clicks'),
+     Input('hero-models-btn', 'n_clicks'),
+     Input('hero-data-btn', 'n_clicks')],
+    prevent_initial_call=True
+)
+def hero_buttons_nav(summary_clicks, models_clicks, data_clicks):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return no_update
+    trigger = ctx.triggered[0]['prop_id']
+    if 'hero-summary-btn' in trigger:
+        return 'summary-tab'
+    if 'hero-models-btn' in trigger:
+        return 'models-tab'
+    if 'hero-data-btn' in trigger:
+        return 'data-tab'
+    return no_update
 
 @app.callback(
     Output('data-content', 'children'),
