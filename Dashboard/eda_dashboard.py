@@ -36,7 +36,6 @@ FALLBACK_PATHS = [
     "../New Data and Work/final_movie_table.csv",
 ]
 
-
 def load_data():
     paths = [DATA_PATH] + FALLBACK_PATHS
     last_err = None

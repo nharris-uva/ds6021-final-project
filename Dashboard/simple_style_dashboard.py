@@ -46,31 +46,6 @@ GOOGLE_FONTS = "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&
 
 # Load data
 raw_data = pd.read_csv("New Data and Work/final_movie_table.csv")
-# metadata = raw_data[["id", "title", "adult", "backdrop_path", "poster_path", "imdb_id", "overview", "tagline", "video"]]
-# original_data = raw_data.drop(columns=["adult", "backdrop_path", "poster_path", "imdb_id", "overview", "tagline", "title", "original_title", "video", "homepage", "production_companies", "production_countries", "status", "spoken_languages"] + [col for col in raw_data.columns if "belongs_to_collection" in col], axis=1)
-# transformed_data = original_data.copy()
-original_data = raw_data.copy()
-transformed_data = original_data.copy()
-
-
-
-#Transformations:
-#Transform budget
-transformed_data['budget'] = transformed_data['budget'].replace(0, np.nan)
-transformed_data['budget'] = np.log1p(transformed_data['budget'])
-#Transform revenue
-transformed_data['revenue'] = transformed_data['revenue'].replace(0, np.nan)
-transformed_data['revenue'] = np.log1p(transformed_data['revenue'])
-#Transform runtime
-transformed_data['runtime'] = transformed_data['runtime'].replace(0, np.nan)
-#Transform release_date
-transformed_data['release_date'] = pd.to_datetime(transformed_data['release_date'], errors='coerce')
-#transform vote_count
-transformed_data['vote_count'] = transformed_data['vote_count'].replace(0, np.nan)
-transformed_data['vote_count'] = np.log1p(transformed_data['vote_count'])
-
-#transform vote_average
-transformed_data['vote_average'] = transformed_data['vote_average'].replace(0, np.nan)
 
 # Initialize the Dash app with external stylesheets and ignore local assets
 app = dash.Dash(
@@ -302,6 +277,50 @@ def fit_mlp_model(df_num, fast=False):
 
 print("Loading model data...")
 df_num_models, df_nz_models = load_and_preprocess_data_models()
+
+# Data tab should compare the original raw dataframe vs the post-processed dataframe.
+# Use the fully loaded raw_data for "Original" and the models' df_nz for "Transformed".
+original_data = raw_data.copy()
+transformed_data = df_nz_models.copy()
+
+# Features used in the Models section and their original→transformed mapping
+FEATURE_MAP = {
+    'vote_average': 'vote_average',
+    'budget': 'log_budget',
+    'revenue': 'log_revenue',
+    'vote_count': 'log_vote_count',
+    'user_rating_count': 'log_user_rating_count',
+    'keyword_count': 'log_keyword_count',
+    'runtime': 'runtime',
+    'primary_genre': 'primary_genre',
+    'year_group': 'year_group',
+    'language_group': 'language_group',
+    'popularity_group': 'popularity_group'
+}
+
+# Ensure engineered categorical features exist on original_data for fair comparison
+if 'primary_genre' not in original_data.columns and 'genres' in original_data.columns:
+    original_data['primary_genre'] = original_data['genres'].astype(str).str.split('|').str[0]
+if 'year_group' not in original_data.columns and 'release_year' in original_data.columns:
+    original_data['year_group'] = pd.cut(
+        original_data['release_year'],
+        bins=[0, 1919, 1949, 1979, 1999, 2009, 2019],
+        labels=['Pre-1920', '1920-1949', '1950-1979', '1980-1999', '2000-2009', '2010-2019']
+    )
+if 'language_group' not in original_data.columns and 'original_language' in original_data.columns:
+    original_data['language_group'] = original_data['original_language'].apply(
+        lambda x: x if x in ['en','fr','ru','hi','es','de','ja','it'] else 'Other'
+    )
+if 'popularity_group' not in original_data.columns and 'lead_actor' in original_data.columns:
+    _actor_counts = (
+        original_data.groupby('lead_actor').size().reset_index(name='movie_count')
+    )
+    _actor_counts['popularity_group'] = pd.cut(
+        _actor_counts['movie_count'],
+        bins=[0, 1, 5, float('inf')],
+        labels=['Low Popularity', 'Medium Popularity', 'High Popularity']
+    )
+    original_data = original_data.merge(_actor_counts[['lead_actor','popularity_group']], on='lead_actor', how='left')
 
 model_cache = {
     'knn_rmse': None,
@@ -1200,31 +1219,28 @@ def create_missingness_bar(col: str):
     )
     return fig
 
-def build_column_row(col):
-    """Build a single row for one column with original, notes, and transformed cards"""
-    col_type = get_column_type(original_data, col)
-    
-    # Skip id column
-    if col == 'id':
-        return None
-    
+def build_column_row(original_col: str, transformed_col: str):
+    """Build a single row comparing original vs transformed features used in models"""
+    # Determine types for appropriate visuals
+    orig_type = get_column_type(original_data, original_col) if original_col in original_data.columns else 'categorical'
+    trans_type = get_column_type(transformed_data, transformed_col) if transformed_col in transformed_data.columns else 'categorical'
+
     # Create appropriate visualizations based on column type
-    if col_type == 'numeric':
-        left_graph = create_numeric_graph(original_data, col)
-        right_graph = create_numeric_graph(transformed_data, col)
-    else:  # categorical
-        left_graph = create_categorical_graph(original_data, col)
-        right_graph = create_categorical_graph(transformed_data, col)
-    
-    # Get transformation notes if available
-    notes = TRANSFORMATION_NOTES.get(col, f"No transformation notes yet for **{col}**.\n\nAdd your transformation explanation here.")
-    
+    left_graph = create_numeric_graph(original_data, original_col) if orig_type == 'numeric' else create_categorical_graph(original_data, original_col)
+    right_graph = create_numeric_graph(transformed_data, transformed_col) if trans_type == 'numeric' else create_categorical_graph(transformed_data, transformed_col)
+
+    # Notes keyed by original → transformed pair
+    notes = TRANSFORMATION_NOTES.get(
+        original_col,
+        f"No transformation notes yet for **{original_col} → {transformed_col}**.\n\nAdd your transformation explanation here."
+    )
+
     row = html.Div([
         # Left card - Original data
         html.Div([
             html.Div([
                 html.Div(
-                    f"Original: {col}",
+                    f"Original: {original_col}",
                     className="card-header fw-semibold",
                     style={"backgroundColor": COLORS['card_background_color']}
                 ),
@@ -1242,14 +1258,14 @@ def build_column_row(col):
         html.Div([
             html.Div([
                 html.Div(
-                    f"Transformation: {col}",
+                    f"Transformation: {original_col} → {transformed_col}",
                     className="card-header fw-semibold",
                     style={"backgroundColor": COLORS['card_background_color']}
                 ),
                 html.Div([
                     html.Div([
                         dcc.Graph(
-                            figure=create_missingness_bar(col),
+                            figure=create_missingness_bar(transformed_col),
                             config={'displayModeBar': False},
                             style={"height": "140px"}
                         )
@@ -1274,7 +1290,7 @@ def build_column_row(col):
         html.Div([
             html.Div([
                 html.Div(
-                    f"Transformed: {col}",
+                    f"Transformed: {transformed_col}",
                     className="card-header fw-semibold",
                     style={"backgroundColor": COLORS['card_background_color']}
                 ),
@@ -1345,19 +1361,18 @@ def create_correlation_matrix(df):
     return fig
 
 def build_dashboard_layout():
-    """Build all rows for all columns"""
+    """Build rows for model-used features only"""
     rows = []
-    for col in original_data.columns:
-        row = build_column_row(col)
-        if row is not None:
-            rows.append(row)
+    for orig_col, trans_col in FEATURE_MAP.items():
+        if orig_col in original_data.columns and trans_col in transformed_data.columns:
+            rows.append(build_column_row(orig_col, trans_col))
     return rows
 
 def build_data_tab_content():
-    """Build the entire Data tab content"""
-    # Get list of columns excluding 'id'
-    columns = [col for col in original_data.columns if col != 'id']
-    
+    """Build the entire Data tab content limited to model-used features"""
+    # Restrict dropdown to original feature names used by models
+    columns = [col for col in FEATURE_MAP.keys() if col in original_data.columns]
+
     return html.Div([
         # Column selector dropdown
         html.Div([
@@ -1409,8 +1424,8 @@ def build_data_tab_content():
             ], className="col-12 col-lg-4")
         ], className="row g-3 mb-3 pb-2", style={'borderBottom': COLORS['border_light']}),
 
-        # Dynamic column visualization container
-        html.Div(id='column-visualization', className="dashboard-rows"),
+        # Rows for model-used features
+        html.Div(build_dashboard_layout(), className="dashboard-rows"),
         
         # Data table section at the bottom
         html.Div([
@@ -1917,6 +1932,20 @@ def update_kmeans_section(active_tab):
         model_cache['kmeans_fitted'] = True
         html_content = build_clustering_section(X_pca, pca_clusters, k_values, silhouette_list, df_clusters, inertia_list, cluster_profiles)
         model_cache['kmeans_html'] = html_content
+        return html_content
+    except Exception as e:
+        return html.Div(f"Error: {str(e)}", className="alert alert-danger")
+
+@app.callback(
+    Output('pca-section-container', 'children'),
+    Input('model-tabs', 'value'),
+    prevent_initial_call=False
+)
+def update_pca_section(active_tab):
+    if active_tab != 'pca':
+        return no_update
+    try:
+        html_content = build_pca_section()
         return html_content
     except Exception as e:
         return html.Div(f"Error: {str(e)}", className="alert alert-danger")
