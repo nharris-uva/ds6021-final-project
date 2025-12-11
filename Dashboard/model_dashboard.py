@@ -15,7 +15,9 @@ from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.neural_network import MLPRegressor
 import json
+import joblib
 import base64
+from pathlib import Path
 
 # Color scheme
 COLORS = {
@@ -123,7 +125,7 @@ def prepare_categorical_data(df_nz):
     
     return df_dummies
 
-def fit_knn_model(df_num):
+def fit_knn_model(df_num, fast=False):
     """Fit KNN with tuning curves and diagnostics."""
     X = df_num.drop(columns=['vote_average'])
     y = df_num['vote_average']
@@ -135,7 +137,7 @@ def fit_knn_model(df_num):
     X_valid_scaled = scaler.transform(X_valid)
     
     # Baseline validation RMSE curve across k (default euclidean/uniform)
-    k_values = list(range(1, 51))
+    k_values = list(range(1, 21)) if fast else list(range(1, 31))
     rmse_curve = []
     for k in k_values:
         m = KNeighborsRegressor(n_neighbors=k)
@@ -153,7 +155,7 @@ def fit_knn_model(df_num):
         KNeighborsRegressor(),
         param_grid,
         scoring='neg_root_mean_squared_error',
-        cv=5,
+        cv=3 if fast else 5,
         n_jobs=-1
     )
     knn_gs.fit(X_train_scaled, y_train)
@@ -185,7 +187,7 @@ def fit_knn_model(df_num):
         ]
     }).sort_values('correlation_with_knn_pred', ascending=False)
     
-    r = permutation_importance(knn_final, X_valid_scaled, y_valid, n_repeats=20, random_state=3001)
+    r = permutation_importance(knn_final, X_valid_scaled, y_valid, n_repeats=(5 if fast else 10), random_state=3001)
     importance_df = pd.DataFrame({
         'feature': X.columns,
         'importance': r.importances_mean
@@ -262,7 +264,7 @@ def fit_linear_model(df_num, df_nz):
     
     return ols_full, df_dummies
 
-def fit_mlp_model(df_num):
+def fit_mlp_model(df_num, fast=False):
     X = df_num.drop(columns=['vote_average'])
     y = df_num['vote_average']
     
@@ -277,7 +279,7 @@ def fit_mlp_model(df_num):
         activation='relu',
         solver='adam',
         alpha=0.0001,
-        max_iter=500,
+        max_iter=(300 if fast else 500),
         random_state=3001
     )
     
@@ -290,7 +292,7 @@ def fit_mlp_model(df_num):
         mlp_final,
         X_valid_scaled,
         y_valid,
-        n_repeats=20,
+        n_repeats=(10 if fast else 20),
         random_state=3001
     )
     
@@ -307,6 +309,44 @@ def fit_mlp_model(df_num):
 print("Loading data...")
 df_num, df_nz = load_and_preprocess_data()
 
+def try_load_cached_results():
+    try:
+        root = Path(__file__).resolve().parents[1]
+        json_path = root / 'data' / 'model_results.json'
+        cache_dir = root / 'data' / 'model_cache'
+        # Load summary metrics json if available (legacy)
+        if json_path.exists():
+            with open(json_path, 'r') as f:
+                data = json.load(f)
+            model_cache['knn_rmse'] = data.get('knn_valid_rmse')
+            model_cache['mlp_train_rmse'] = data.get('mlp_train_rmse')
+            model_cache['mlp_valid_rmse'] = data.get('mlp_valid_rmse')
+            print("Loaded legacy cached model results for comparison.")
+        # Load serialized artifacts if available
+        if cache_dir.exists():
+            knn_file = cache_dir / 'knn.joblib'
+            mlp_file = cache_dir / 'mlp.joblib'
+            kmeans_pca_file = cache_dir / 'kmeans_pca.joblib'
+            if knn_file.exists():
+                knn_payload = joblib.load(knn_file)
+                model_cache['knn_rmse'] = knn_payload.get('valid_rmse')
+                model_cache['knn_payload'] = knn_payload
+                model_cache['knn_fitted'] = True
+            if mlp_file.exists():
+                mlp_payload = joblib.load(mlp_file)
+                model_cache['mlp_train_rmse'] = mlp_payload.get('train_rmse')
+                model_cache['mlp_valid_rmse'] = mlp_payload.get('valid_rmse')
+                model_cache['mlp_payload'] = mlp_payload
+                model_cache['mlp_fitted'] = True
+            if kmeans_pca_file.exists():
+                model_cache['kmeans_pca_payload'] = joblib.load(kmeans_pca_file)
+                model_cache['kmeans_fitted'] = True
+            model_cache['fitted'] = bool(model_cache['knn_fitted'] and model_cache['mlp_fitted'])
+            if model_cache['fitted']:
+                print("Loaded serialized model cache artifacts.")
+    except Exception as e:
+        print(f"Failed to load cached results: {e}")
+
 # Global variables to cache model results
 model_cache = {
     'knn_rmse': None,
@@ -321,7 +361,10 @@ model_cache = {
     'knn_html': None,
     'kmeans_html': None,
     'mlp_html': None,
-    'comparison_html': None
+    'comparison_html': None,
+    'knn_payload': None,
+    'mlp_payload': None,
+    'kmeans_pca_payload': None
 }
 
 # Initialize Dash app
@@ -333,7 +376,9 @@ app = dash.Dash(
 )
 
 px.defaults.template = "plotly_dark"
-DEFAULT_FIG_MARGIN = dict(l=10, r=10, t=10, b=20)
+# Increase top margin to ensure figure titles are not clipped
+DEFAULT_FIG_MARGIN = dict(l=10, r=10, t=40, b=30)
+try_load_cached_results()
 
 def create_loading_spinner(model_name):
     """Create a loading spinner card"""
@@ -1275,6 +1320,8 @@ app.layout = html.Div([
         ], className="col-12")
     ], className="row mb-4"),
 
+    # (Removed) Run mode toggle
+
     # Bottom Model Comparison card outside tabs
     html.Div([
         html.Div([
@@ -1339,10 +1386,12 @@ app.layout = html.Div([
 # Callbacks to fit models and update sections (runs once after 500ms delay)
 @callback(
     Output('linear-section-container', 'children'),
-    Input('interval-trigger', 'n_intervals'),
+    Input('model-tabs', 'value'),
     prevent_initial_call=False
 )
-def update_linear_section(n):
+def update_linear_section(active_tab):
+    if active_tab != 'linear':
+        return dash.no_update
     if model_cache['linear_fitted']:
         return model_cache['linear_html']  # Return cached HTML
     print("Fitting Linear Regression model...")
@@ -1358,12 +1407,20 @@ def update_linear_section(n):
 
 @callback(
     Output('knn-section-container', 'children'),
-    Input('interval-trigger', 'n_intervals'),
+    Input('model-tabs', 'value'),
     prevent_initial_call=False
 )
-def update_knn_section(n):
-    if model_cache['knn_fitted']:
-        return model_cache['knn_html']  # Return cached HTML
+def update_knn_section(active_tab):
+    if active_tab != 'knn':
+        return dash.no_update
+    if model_cache['knn_fitted'] and model_cache['knn_payload'] is not None:
+        # Build HTML from cached payload
+        p = model_cache['knn_payload']
+        importance_df = pd.DataFrame(p['importance'])
+        corr_df = pd.DataFrame(p['correlation']).sort_values('correlation_with_knn_pred', ascending=False)
+        html_content = build_knn_section(importance_df, p['valid_rmse'], p['k_values'], p['rmse_curve'], p['rmse_curve_tuned'], corr_df, p['best_params'])
+        model_cache['knn_html'] = html_content
+        return html_content
     print("Fitting KNN model...")
     try:
         (
@@ -1380,7 +1437,7 @@ def update_knn_section(n):
             rmse_curve_tuned,
             corr_df,
             best_params
-        ) = fit_knn_model(df_num)
+        ) = fit_knn_model(df_num, fast=False)
         # Cache the result
         model_cache['knn_rmse'] = knn_rmse
         model_cache['knn_fitted'] = True
@@ -1393,12 +1450,21 @@ def update_knn_section(n):
 
 @callback(
     Output('kmeans-section-container', 'children'),
-    Input('interval-trigger', 'n_intervals'),
+    Input('model-tabs', 'value'),
     prevent_initial_call=False
 )
-def update_kmeans_section(n):
-    if model_cache['kmeans_fitted']:
-        return model_cache['kmeans_html']  # Return cached HTML
+def update_kmeans_section(active_tab):
+    if active_tab != 'kmeans':
+        return dash.no_update
+    if model_cache['kmeans_fitted'] and model_cache['kmeans_pca_payload'] is not None:
+        p = model_cache['kmeans_pca_payload']
+        cluster_profiles = pd.DataFrame(p['cluster_profiles'])
+        df_clusters_small = pd.DataFrame(p['df_clusters_small'])
+        X_pca = np.array(p['X_pca'])
+        pca_clusters = np.array(p['pca_clusters'])
+        html_content = build_clustering_section(X_pca, pca_clusters, p['k_values'], p['silhouette_list'], df_clusters_small, p['inertia_list'], cluster_profiles)
+        model_cache['kmeans_html'] = html_content
+        return html_content
     print("Fitting K-Means model...")
     try:
         kmeans_model, X_scaled_km, df_clusters, k_values, inertia_list, silhouette_list, cluster_profiles = fit_kmeans_model(df_num)
@@ -1413,15 +1479,21 @@ def update_kmeans_section(n):
 
 @callback(
     Output('mlp-section-container', 'children'),
-    Input('interval-trigger', 'n_intervals'),
+    Input('model-tabs', 'value'),
     prevent_initial_call=False
 )
-def update_mlp_section(n):
-    if model_cache['mlp_fitted']:
-        return model_cache['mlp_html']  # Return cached HTML
+def update_mlp_section(active_tab):
+    if active_tab != 'mlp':
+        return dash.no_update
+    if model_cache['mlp_fitted'] and model_cache['mlp_payload'] is not None:
+        p = model_cache['mlp_payload']
+        importance_df = pd.DataFrame(p['importance'])
+        html_content = build_mlp_section(importance_df, p['train_rmse'], p['valid_rmse'], p['loss_curve'])
+        model_cache['mlp_html'] = html_content
+        return html_content
     print("Fitting MLP model...")
     try:
-        mlp_model, mlp_train_rmse, mlp_valid_rmse, mlp_importance, loss_curve = fit_mlp_model(df_num)
+        mlp_model, mlp_train_rmse, mlp_valid_rmse, mlp_importance, loss_curve = fit_mlp_model(df_num, fast=False)
         # Cache the results
         model_cache['mlp_train_rmse'] = mlp_train_rmse
         model_cache['mlp_valid_rmse'] = mlp_valid_rmse
