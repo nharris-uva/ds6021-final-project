@@ -19,6 +19,8 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error, silhouette_score
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.inspection import permutation_importance
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
@@ -57,13 +59,33 @@ def write_html(fig: go.Figure, filename: str):
 
 
 def write_simple_table_html(df: pd.DataFrame, filename: str, title: str = None):
-    html = ["<html><head><meta charset='utf-8'><title>Table</title></head><body>"]
+    html = [
+        "<html><head><meta charset='utf-8'><title>Table</title>",
+        "<link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css\">",
+        "<style>body{font-family:Inter,system-ui;color:#222;margin:12px} h3{color:#FF8E3C;margin:8px 0 12px}</style>",
+        "</head><body>"
+    ]
     if title:
         html.append(f"<h3 style='font-family:Inter,system-ui;color:{COLORS['header']}'>{title}</h3>")
-    html.append(df.to_html(index=False, border=0))
+    html.append(df.to_html(index=False, border=0, classes=["table","table-striped","table-bordered","table-sm","align-middle","text-center"]))
     html.append("</body></html>")
     path = OUTPUT_DIR / filename
     path.write_text("\n".join(html), encoding="utf-8")
+    print(f"Wrote {path}")
+
+
+def write_comparison_table_html(df: pd.DataFrame, filename: str):
+    head = (
+        "<html><head><meta charset='utf-8'><title>Model Comparison</title>"
+        "<link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css\">"
+        "<style>body{font-family:Inter,system-ui;color:#222;margin:12px} h3{color:#FF8E3C;margin:8px 0 12px}</style>"
+        "</head><body>"
+    )
+    header = "<h3>Model Performance Comparison</h3>"
+    table_html = df.to_html(index=False, border=0, classes=["table","table-striped","table-bordered","table-sm","align-middle","text-center"]) 
+    doc = head + header + table_html + "</body></html>"
+    path = OUTPUT_DIR / filename
+    path.write_text(doc, encoding='utf-8')
     print(f"Wrote {path}")
 
 
@@ -283,14 +305,7 @@ if mlp_payload:
     write_html(fig_loss, 'mlp_loss_curve.html')
 
 # Comparison table
-comparison_json = DATA_DIR / "model_results.json"
-if comparison_json.exists():
-    try:
-        results = json.loads(comparison_json.read_text())
-        df_comp = pd.DataFrame(results)
-        write_simple_table_html(df_comp, 'comparison_table.html', title='Model Performance Comparison')
-    except Exception:
-        pass
+# Deprecated: JSON-driven comparison. We now always rebuild from CSV below.
 
 print("Graph cache generation complete.")
 
@@ -363,21 +378,34 @@ try:
         ols_summary['p-value'] = ols_summary['p-value'].round(6)
 
         # Compose HTML with stats header + table
-        header_html = f"""
-        <div style='font-family:Inter,system-ui'>
-            <h3 style='color:{COLORS['header']}'>Linear Regression Analysis with Categorical Features</h3>
-            <ul>
-                <li>R-squared: {ols.rsquared:.4f} (~{ols.rsquared*100:.1f}% of variance)</li>
-                <li>Adjusted R-squared: {ols.rsquared_adj:.4f}</li>
-                <li>F-statistic: {ols.fvalue:.2f}</li>
-                <li>Prob(F-statistic): {ols.f_pvalue:.2e}</li>
-                <li>Observations: {len(ols.resid)}</li>
-            </ul>
+        # Compose styled HTML with inline CSS to ensure proper table rendering
+        css = """
+        <style>
+        body{font-family:Inter,system-ui;color:#222;margin:12px}
+        table{border-collapse:collapse;width:100%;font-size:13px}
+        th,td{border:1px solid #ddd;padding:8px;text-align:center}
+        thead th{background:#FF8E3C;color:#fff;font-weight:bold}
+        tbody tr:nth-child(odd){background:#EFF0F3}
+        h3{color:#FF8E3C;margin:8px 0 12px}
+        .stat-label{font-weight:600;margin-right:6px}
+        .stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:8px 0 16px}
+        .stat-item{padding:6px 8px;border:1px solid #ddd;background:#fafafa;text-align:center}
+        </style>
+        """
+        stats_html = f"""
+        <h3>Linear Regression Analysis with Categorical Features</h3>
+        <div class='stat-grid'>
+            <div class='stat-item'><span class='stat-label'>R-squared</span>{ols.rsquared:.4f}</div>
+            <div class='stat-item'><span class='stat-label'>Adj. R-squared</span>{ols.rsquared_adj:.4f}</div>
+            <div class='stat-item'><span class='stat-label'>F-statistic</span>{ols.fvalue:.2f}</div>
+            <div class='stat-item'><span class='stat-label'>Prob(F)</span>{ols.f_pvalue:.2e}</div>
+            <div class='stat-item'><span class='stat-label'>Observations</span>{len(ols.resid)}</div>
         </div>
         """
         table_html = ols_summary.to_html(index=False, border=0)
+        doc = "<html><head><meta charset='utf-8'><title>OLS Summary</title>" + css + "</head><body>" + stats_html + table_html + "</body></html>"
         path = OUTPUT_DIR / 'linear_ols_table.html'
-        path.write_text("<html><body>" + header_html + table_html + "</body></html>", encoding='utf-8')
+        path.write_text(doc, encoding='utf-8')
         print(f"Wrote {path}")
 except Exception as e:
     print(f"Skipping OLS generation due to error: {e}")
@@ -400,7 +428,7 @@ try:
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
         pca = PCA(n_components=3)
-        pca.fit(X_scaled)
+        X_pca = pca.fit_transform(X_scaled)
         pca_summary = pd.DataFrame({
             'PC': np.arange(1, 4),
             'ExplainedVariance': pca.explained_variance_ratio_[:3],
@@ -408,8 +436,31 @@ try:
         })
         # Write simple HTML table
         write_simple_table_html(pca_summary, 'pca_summary.html', title='PCA Explained Variance (Top 3 PCs)')
+        # Explained variance bar
+        fig_ev = px.bar(pca_summary, x='PC', y='ExplainedVariance', title='Explained Variance by Principal Component')
+        fig_ev = apply_fig_theme(fig_ev, height=320)
+        write_html(fig_ev, 'pca_explained_variance.html')
+        # PCA 2D scatter (PC1 vs PC2)
+        df_pca2 = pd.DataFrame({'PC1': X_pca[:,0], 'PC2': X_pca[:,1]})
+        fig_pca2 = px.scatter(df_pca2, x='PC1', y='PC2', opacity=0.6, title='PCA Scatter: PC1 vs PC2')
+        fig_pca2.update_traces(marker=dict(size=5))
+        fig_pca2 = apply_fig_theme(fig_pca2, height=380)
+        write_html(fig_pca2, 'pca_scatter_2d.html')
+        # PCA 3D scatter (PC1, PC2, PC3)
+        df_pca3 = pd.DataFrame({'PC1': X_pca[:,0], 'PC2': X_pca[:,1], 'PC3': X_pca[:,2]})
+        fig_pca3 = px.scatter_3d(df_pca3, x='PC1', y='PC2', z='PC3', title='PCA Scatter: 3D (PC1, PC2, PC3)', opacity=0.6)
+        fig_pca3.update_traces(marker=dict(size=4))
+        fig_pca3 = apply_fig_theme(fig_pca3, height=400)
+        write_html(fig_pca3, 'pca_scatter_3d.html')
+        # Loadings heatmap for PC1..PC3
+        loadings = pd.DataFrame(pca.components_[:3], columns=X.columns, index=['PC1','PC2','PC3'])
+        loadings_melt = loadings.reset_index().melt(id_vars='index', var_name='feature', value_name='loading').rename(columns={'index':'PC'})
+        fig_load = px.imshow(loadings.values, x=X.columns, y=['PC1','PC2','PC3'], color_continuous_scale='RdBu', origin='lower',
+                             title='PCA Loadings (PC1..PC3)')
+        fig_load = apply_fig_theme(fig_load, height=380)
+        write_html(fig_load, 'pca_loadings.html')
 except Exception as e:
-    print(f"Skipping PCA summary due to error: {e}")
+    print(f"Skipping PCA summary/plots due to error: {e}")
 
 # --- Fallbacks from CSV to ensure required graphs exist ---
 try:
@@ -438,10 +489,9 @@ try:
         X_scaled = scaler.fit_transform(X)
 
         # KNN fallback
-        if 'knn_importance.html' in missing or 'knn_feature_corr.html' in missing or 'comparison_table.html' in missing:
+        # Always compute comparison table from CSV (and generate KNN artifacts if missing)
+        if True:
             try:
-                # Simple split
-                from sklearn.model_selection import train_test_split
                 X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.25, random_state=3001)
                 X_train_s = scaler.fit_transform(X_train)
                 X_valid_s = scaler.transform(X_valid)
@@ -464,14 +514,33 @@ try:
                 fig_corr.update_layout(xaxis_tickangle=45)
                 fig_corr = apply_fig_theme(fig_corr, height=360)
                 write_html(fig_corr, 'knn_feature_corr.html')
-                # Comparison table (partial)
+                # Compute Linear Regression baseline
+                lr = LinearRegression()
+                lr.fit(X_train_s, y_train)
+                lr_train_rmse = float(np.sqrt(mean_squared_error(y_train, lr.predict(X_train_s))))
+                lr_valid_rmse = float(np.sqrt(mean_squared_error(y_valid, lr.predict(X_valid_s))))
+
+                # If MLP importance was created, also compute its RMSE
+                mlp_train_rmse = '—'
+                mlp_valid_rmse = '—'
+                if (OUTPUT_DIR / 'mlp_importance.html').exists():
+                    try:
+                        from sklearn.neural_network import MLPRegressor
+                        mlp = MLPRegressor(hidden_layer_sizes=(64,), activation='relu', solver='adam', alpha=0.0001, max_iter=300, random_state=3001)
+                        mlp.fit(X_train_s, y_train)
+                        mlp_train_rmse = f"{np.sqrt(mean_squared_error(y_train, mlp.predict(X_train_s))):.3f}"
+                        mlp_valid_rmse = f"{np.sqrt(mean_squared_error(y_valid, mlp.predict(X_valid_s))):.3f}"
+                    except Exception:
+                        pass
+
+                # Build comparison table (always overwrite)
                 df_comp = pd.DataFrame({
                     'Model': ['Linear Regression', 'KNN (Fallback)', 'K-Means', 'MLP (Fallback)'],
-                    'Train RMSE': ['—', f'{valid_rmse:.3f}', 'N/A', '—'],
-                    'Valid RMSE': ['—', f'{valid_rmse:.3f}', 'Clustering', '—'],
+                    'Train RMSE': [f'{lr_train_rmse:.3f}', '—', 'N/A', mlp_train_rmse],
+                    'Valid RMSE': [f'{lr_valid_rmse:.3f}', f'{valid_rmse:.3f}', 'Clustering', mlp_valid_rmse],
                     'Type': ['Interpretable', 'Distance-based', 'Unsupervised', 'Nonlinear']
                 })
-                write_simple_table_html(df_comp, 'comparison_table.html', title='Model Performance Comparison')
+                write_comparison_table_html(df_comp, 'comparison_table.html')
             except Exception:
                 pass
 
@@ -557,3 +626,55 @@ try:
                 pass
 except Exception as e:
     print(f"Fallback generation error: {e}")
+
+# --- Always rebuild Model Comparison from CSV ---
+try:
+    if raw_df is not None:
+        df = raw_df.copy()
+        df = df[df['budget'] > 0].copy()
+        df['log_budget'] = np.log1p(df['budget'])
+        df['log_revenue'] = np.log1p(df['revenue'])
+        df['log_vote_count'] = np.log1p(df['vote_count'])
+        df['log_user_rating_count'] = np.log1p(df['user_rating_count'])
+        df['log_keyword_count'] = np.log1p(df['keyword_count'])
+        numeric_vars = ['vote_average','log_budget','log_revenue','log_vote_count','log_user_rating_count','log_keyword_count','runtime']
+        df_num = df[numeric_vars].dropna().copy()
+        X = df_num.drop(columns=['vote_average'])
+        y = df_num['vote_average']
+        scaler = StandardScaler()
+        X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.25, random_state=3001)
+        X_train_s = scaler.fit_transform(X_train)
+        X_valid_s = scaler.transform(X_valid)
+
+        # Linear Regression
+        lr = LinearRegression()
+        lr.fit(X_train_s, y_train)
+        lr_train_rmse = float(np.sqrt(mean_squared_error(y_train, lr.predict(X_train_s))))
+        lr_valid_rmse = float(np.sqrt(mean_squared_error(y_valid, lr.predict(X_valid_s))))
+
+        # KNN
+        knn = KNeighborsRegressor(n_neighbors=5, weights='distance', metric='manhattan')
+        knn.fit(X_train_s, y_train)
+        knn_valid_rmse = float(np.sqrt(mean_squared_error(y_valid, knn.predict(X_valid_s))))
+
+        # Optional MLP
+        mlp_train_rmse = '—'
+        mlp_valid_rmse = '—'
+        try:
+            from sklearn.neural_network import MLPRegressor
+            mlp = MLPRegressor(hidden_layer_sizes=(64,), activation='relu', solver='adam', alpha=0.0001, max_iter=300, random_state=3001)
+            mlp.fit(X_train_s, y_train)
+            mlp_train_rmse = f"{np.sqrt(mean_squared_error(y_train, mlp.predict(X_train_s))):.3f}"
+            mlp_valid_rmse = f"{np.sqrt(mean_squared_error(y_valid, mlp.predict(X_valid_s))):.3f}"
+        except Exception:
+            pass
+
+        df_comp = pd.DataFrame({
+            'Model': ['Linear Regression', 'KNN (Fallback)', 'K-Means', 'MLP (Fallback)'],
+            'Train RMSE': [f'{lr_train_rmse:.3f}', '—', 'N/A', mlp_train_rmse],
+            'Valid RMSE': [f'{lr_valid_rmse:.3f}', f'{knn_valid_rmse:.3f}', 'Clustering', mlp_valid_rmse],
+            'Type': ['Interpretable', 'Distance-based', 'Unsupervised', 'Nonlinear']
+        })
+        write_comparison_table_html(df_comp, 'comparison_table.html')
+except Exception as e:
+    print(f"Comparison rebuild error: {e}")

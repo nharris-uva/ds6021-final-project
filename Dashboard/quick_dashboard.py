@@ -88,6 +88,38 @@ app.layout = html.Div([
                     ], className="card-body")
                 ], className="card"),
             ], className="mb-4"),
+
+            # Copied markdown cards from simple_style_dashboard.py
+            html.Div([
+                html.Div([
+                    html.Div("Group Members", className="card-header fw-semibold"),
+                    html.Div([
+                        html.Ul([
+                            html.Li("Sabine Segaloff"),
+                            html.Li("Tianyin Mao"),
+                            html.Li("Mason Earp"),
+                            html.Li("Nick Thornton"),
+                            html.Li("Nate Harris"),
+                        ], className="mb-0", style={'fontFamily': 'Inter, system-ui'})
+                    ], className="card-body")
+                ], className="card"),
+            ], className="mb-4"),
+
+            html.Div([
+                html.Div([
+                    html.Div("Dataset", className="card-header fw-semibold"),
+                    html.Div([
+                        html.P(
+                            [
+                                "Dataset source: ",
+                                html.A("The Movies Dataset on Kaggle", href="https://www.kaggle.com/datasets/rounakbanik/the-movies-dataset", target="_blank")
+                            ],
+                            className="mb-0",
+                            style={'fontFamily': 'Inter, system-ui', 'fontSize': '16px'}
+                        )
+                    ], className="card-body")
+                ], className="card"),
+            ])
         ], style={'display': 'block'}),
 
         # Models content (iframes for each section)
@@ -107,6 +139,33 @@ app.layout = html.Div([
                                         ], className="card-body p-2")
                                     ], className="card")
                                 ], className="col-12")
+                            ], className="row mb-4"),
+                            html.Div([
+                                html.Div([
+                                    html.Div([
+                                        html.Div(
+                                            "Linear Regression Analysis with Categorical Features",
+                                            className="card-header fw-semibold"
+                                        ),
+                                        html.Div([
+                                            html.P(
+                                                "Comprehensive linear regression incorporating numeric predictors and categorical features (genres, release years, languages, and actor popularity). This model reveals how multiple factors combine to explain movie ratings, showing strong positive effects from engagement metrics and important contributions from categorical structure.",
+                                                className="mb-3"
+                                            ),
+                                            html.Div([
+                                                html.Strong("Key Findings:"),
+                                                html.Ul([
+                                                    html.Li("Log vote count: Strongest positive predictor of ratings"),
+                                                    html.Li("Log user rating count: Second strongest engagement metric"),
+                                                    html.Li("Genre effects: Documentary, History, Drama, War, Music, and Crime show strong positive effects"),
+                                                    html.Li("Temporal patterns: Older films tend to have higher ratings than recent releases"),
+                                                    html.Li("Language effects: Smaller language markets associated with higher average ratings"),
+                                                    html.Li("Actor popularity: Frequent actors associated with higher rated films"),
+                                                ])
+                                            ])
+                                        ], className="card-body")
+                                    ], className="card")
+                                ], className="col-12")
                             ], className="row mb-4")
                         ]),
                         dcc.Tab(label='KNN Regression', value='knn', children=[
@@ -123,7 +182,32 @@ app.layout = html.Div([
                                         html.Div([
                                             graph_iframe('knn_rmse_curve.html'),
                                             graph_iframe('knn_rmse_tuned.html')
-                                        ], className="card-body p-2")
+                            ], className="row g-3"),
+                            html.Div([
+                                html.Div([
+                                    html.Div([
+                                        html.Div(
+                                            "MLP Performance Summary",
+                                            className="card-header fw-semibold"
+                                        ),
+                                        html.Div([
+                                            html.P(
+                                                "The tuned MLP achieves the strongest predictive performance by learning smooth nonlinear relationships between engagement metrics and ratings.",
+                                                className="mb-3"
+                                            ),
+                                            html.Div([
+                                                html.Strong("Key Insights:"),
+                                                html.Ul([
+                                                    html.Li("Best overall predictive performance"),
+                                                    html.Li("Captures smooth nonlinear relationships"),
+                                                    html.Li("Low training-validation gap indicates good generalization"),
+                                                    html.Li("Variable importance aligned with KNN findings"),
+                                                ])
+                                            ])
+                                        ], className="card-body")
+                                    ], className="card")
+                                ], className="col-12")
+                            ], className="row mb-4")
                                     ], className="card h-100")
                                 ], className="col-12 col-xl-4 mb-3"),
                                 html.Div([
@@ -182,7 +266,57 @@ app.layout = html.Div([
                                 html.Div([
                                     html.Div([
                                         html.Div("PCA Summary", className="card-header fw-semibold"),
-                                        html.Div([graph_iframe('pca_summary.html')], className="card-body p-2")
+                                        html.Div([
+                                            graph_iframe('pca_summary.html'),
+                                            graph_iframe('pca_explained_variance.html', height=340)
+                                        ], className="card-body p-2")
+                                    ], className="card")
+                                ], className="col-12")
+                            ], className="row mb-4"),
+                            html.Div([
+                                html.Div([
+                                    html.Div([
+                                        html.Div("PCA Scatter (2D)", className="card-header fw-semibold"),
+                                        html.Div([graph_iframe('pca_scatter_2d.html', height=400)], className="card-body p-2")
+                                    ], className="card h-100")
+                                ], className="col-12 col-xl-6 mb-3"),
+                                html.Div([
+                                    html.Div([
+                                        html.Div("PCA Scatter (3D)", className="card-header fw-semibold"),
+                                        html.Div([graph_iframe('pca_scatter_3d.html', height=420)], className="card-body p-2")
+                                    ], className="card h-100")
+                                ], className="col-12 col-xl-6 mb-3"),
+                            ], className="row g-3"),
+                            html.Div([
+                                html.Div([
+                                    html.Div([
+                                        html.Div("PCA Loadings", className="card-header fw-semibold"),
+                                        html.Div([graph_iframe('pca_loadings.html', height=380)], className="card-body p-2")
+                                    ], className="card")
+                                ], className="col-12")
+                            ], className="row mb-4"),
+                            html.Div([
+                                html.Div([
+                                    html.Div([
+                                        html.Div(
+                                            "PCA Interpretation",
+                                            className="card-header fw-semibold"
+                                        ),
+                                        html.Div([
+                                            html.P(
+                                                "Principal Component Analysis compresses the numeric features into orthogonal components that capture most variance with fewer dimensions. The first component is largely an engagement-scale axis (vote/user rating counts), followed by budget/revenue scale and runtime effects.",
+                                                className="mb-3"
+                                            ),
+                                            html.Div([
+                                                html.Strong("Highlights:"),
+                                                html.Ul([
+                                                    html.Li("Variance is concentrated in the first few components (see Scree and Cumulative plots)"),
+                                                    html.Li("Loadings identify which original features drive each component"),
+                                                    html.Li("2D/3D projections show smooth gradients in `vote_average` across PCA space"),
+                                                    html.Li("PCA space facilitates clustering (K-Means) and visualization without heavy overplotting"),
+                                                ])
+                                            ])
+                                        ], className="card-body")
                                     ], className="card")
                                 ], className="col-12")
                             ], className="row mb-4")
@@ -211,7 +345,44 @@ app.layout = html.Div([
                 html.Div([
                     html.Div([
                         html.Div("Model Performance Comparison", className="card-header fw-semibold"),
-                        html.Div([graph_iframe('comparison_table.html', height=300)], className="card-body p-3")
+                        html.Div([graph_iframe('comparison_table.html', height=420)], className="card-body p-3")
+                    ], className="card")
+                ], className="col-12")
+            ], className="row mb-4"),
+
+            # Copied "Key Conclusions" markdown from simple_style_dashboard.py
+            html.Div([
+                html.Div([
+                    html.Div([
+                        html.Div(
+                            "Key Conclusions",
+                            className="card-header fw-semibold"
+                        ),
+                        html.Div([
+                            html.H5("Model Performance Rankings:", className="fw-bold mt-3"),
+                            html.Ol([
+                                html.Li([html.Strong("MLP (Best):"), " Validation RMSE ~0.88 - Captures nonlinear relationships effectively"]),
+                                html.Li([html.Strong("KNN (Strong):"), " Validation RMSE will update - Excellent local neighborhood exploitation"]),
+                                html.Li([html.Strong("Linear Regression:"), " Provides interpretability but limited by linearity assumption"]),
+                                html.Li([html.Strong("K-Means:"), " Unsupervised clustering reveals natural movie groupings"]),
+                            ]),
+                            html.Hr(),
+                            html.H5("Universal Finding:", className="fw-bold mt-3"),
+                            html.P(
+                                "Across all models, user engagement metrics (log vote count and log user rating count) "
+                                "are the dominant predictors of movie ratings. Financial attributes (budget, revenue) "
+                                "contribute less than engagement variables, suggesting that audience interaction patterns "
+                                "are more informative than production scale."
+                            ),
+                            html.Hr(),
+                            html.H5("Structural Insights:", className="fw-bold mt-3"),
+                            html.Ul([
+                                html.Li("PCA reveals that >50% of variance is driven by a single engagement-scale dimension"),
+                                html.Li("K-Means identifies 4 natural movie archetypes based on budget, engagement, and runtime"),
+                                html.Li("Nonlinear models (KNN, MLP) substantially outperform linear approaches"),
+                                html.Li("The dataset exhibits meaningful local structure that distance-based and neural approaches can exploit"),
+                            ])
+                        ], className="card-body")
                     ], className="card")
                 ], className="col-12")
             ], className="row mb-4"),
