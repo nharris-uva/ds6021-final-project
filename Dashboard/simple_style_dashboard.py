@@ -1,4 +1,5 @@
 
+import os
 import pandas as pd
 import dash
 from dash import dcc, html, dash_table, no_update
@@ -54,6 +55,7 @@ app = dash.Dash(
     include_assets_files=True,
     suppress_callback_exceptions=True
 )
+server = app.server
 
 # Plotly visual style
 px.defaults.template = "plotly_dark"
@@ -2185,4 +2187,8 @@ app.index_string = '''
 '''
 
 if __name__ == '__main__':
-    app.run(debug=True, port=8050, host='127.0.0.1')
+    app.run(
+        debug=False,
+        host='0.0.0.0',
+        port=int(os.environ.get('PORT', 8050))
+    )
