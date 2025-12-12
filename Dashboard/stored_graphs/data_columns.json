@@ -1,0 +1,68 @@
+[
+  {
+    "column": "vote_average",
+    "plot": "data_col_vote_average.html",
+    "metrics": "data_metrics_vote_average.html",
+    "type": "numeric"
+  },
+  {
+    "column": "log_budget",
+    "plot": "data_col_log_budget.html",
+    "metrics": "data_metrics_log_budget.html",
+    "type": "numeric"
+  },
+  {
+    "column": "log_revenue",
+    "plot": "data_col_log_revenue.html",
+    "metrics": "data_metrics_log_revenue.html",
+    "type": "numeric"
+  },
+  {
+    "column": "log_vote_count",
+    "plot": "data_col_log_vote_count.html",
+    "metrics": "data_metrics_log_vote_count.html",
+    "type": "numeric"
+  },
+  {
+    "column": "log_user_rating_count",
+    "plot": "data_col_log_user_rating_count.html",
+    "metrics": "data_metrics_log_user_rating_count.html",
+    "type": "numeric"
+  },
+  {
+    "column": "log_keyword_count",
+    "plot": "data_col_log_keyword_count.html",
+    "metrics": "data_metrics_log_keyword_count.html",
+    "type": "numeric"
+  },
+  {
+    "column": "runtime",
+    "plot": "data_col_runtime.html",
+    "metrics": "data_metrics_runtime.html",
+    "type": "numeric"
+  },
+  {
+    "column": "primary_genre",
+    "plot": "data_col_primary_genre.html",
+    "metrics": "data_metrics_primary_genre.html",
+    "type": "categorical"
+  },
+  {
+    "column": "year_group",
+    "plot": "data_col_year_group.html",
+    "metrics": "data_metrics_year_group.html",
+    "type": "categorical"
+  },
+  {
+    "column": "language_group",
+    "plot": "data_col_language_group.html",
+    "metrics": "data_metrics_language_group.html",
+    "type": "categorical"
+  },
+  {
+    "column": "popularity_group",
+    "plot": "data_col_popularity_group.html",
+    "metrics": "data_metrics_popularity_group.html",
+    "type": "categorical"
+  }
+]

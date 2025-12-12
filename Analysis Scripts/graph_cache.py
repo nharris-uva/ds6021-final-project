@@ -678,3 +678,196 @@ try:
         write_comparison_table_html(df_comp, 'comparison_table.html')
 except Exception as e:
     print(f"Comparison rebuild error: {e}")
+
+# --- Data Tab Precomputations: Transformed table and correlation matrix ---
+try:
+    if raw_df is not None:
+        df = raw_df.copy()
+        # Match transformed_data in simple_style_dashboard.py: budget > 0 and engineered logs/categoricals
+        df = df[df['budget'] > 0].copy()
+        # Engineered numeric features
+        if 'budget' in df.columns:
+            df['log_budget'] = np.log1p(df['budget'])
+        if 'revenue' in df.columns:
+            df['log_revenue'] = np.log1p(df['revenue'])
+        if 'vote_count' in df.columns:
+            df['log_vote_count'] = np.log1p(df['vote_count'])
+        if 'user_rating_count' in df.columns:
+            df['log_user_rating_count'] = np.log1p(df['user_rating_count'])
+        if 'keyword_count' in df.columns:
+            df['log_keyword_count'] = np.log1p(df['keyword_count'])
+
+        # Categoricals
+        if 'genres' in df.columns:
+            df['primary_genre'] = df['genres'].astype(str).str.split('|').str[0]
+        if 'release_year' in df.columns:
+            df['year_group'] = pd.cut(
+                df['release_year'],
+                bins=[0, 1919, 1949, 1979, 1999, 2009, 2019],
+                labels=['Pre-1920', '1920-1949', '1950-1979', '1980-1999', '2000-2009', '2010-2019']
+            )
+        if 'original_language' in df.columns:
+            df['language_group'] = df['original_language'].apply(
+                lambda x: x if x in ['en','fr','ru','hi','es','de','ja','it'] else 'Other'
+            )
+        if 'lead_actor' in df.columns:
+            counts = df.groupby('lead_actor').size().reset_index(name='movie_count')
+            counts['popularity_group'] = pd.cut(
+                counts['movie_count'],
+                bins=[0, 1, 5, float('inf')],
+                labels=['Low Popularity', 'Medium Popularity', 'High Popularity']
+            )
+            df = df.merge(counts[['lead_actor','popularity_group']], on='lead_actor', how='left')
+
+        # Select transformed columns similar to Data tab focus
+        transformed_cols = [
+            c for c in [
+                'vote_average',
+                'log_budget','log_revenue','log_vote_count','log_user_rating_count','log_keyword_count','runtime',
+                'primary_genre','year_group','language_group','popularity_group'
+            ] if c in df.columns
+        ]
+        df_transformed = df[transformed_cols].dropna().copy()
+
+        # Write transformed data table (limit rows for readability)
+        max_rows = 300
+        df_preview = df_transformed.head(max_rows)
+        write_simple_table_html(df_preview, 'data_transformed_table.html', title='Post-Processed Dataset Preview')
+
+        # Build correlation matrix for numeric columns only
+        numeric_cols = df_transformed.select_dtypes(include=[np.number]).columns.tolist()
+        if 'id' in numeric_cols:
+            numeric_cols.remove('id')
+        if len(numeric_cols) >= 2:
+            corr = df_transformed[numeric_cols].corr()
+            fig_corr = go.Figure(data=go.Heatmap(
+                z=corr.values,
+                x=corr.columns,
+                y=corr.columns,
+                colorscale='RdBu',
+                zmid=0,
+                zmin=-1,
+                zmax=1,
+                text=np.round(corr.values, 2),
+                texttemplate='%{text}',
+                textfont={"size": 10},
+                colorbar=dict(title='Correlation', tickmode='linear', tick0=-1, dtick=0.5)
+            ))
+            fig_corr.update_layout(
+                title='Correlation Matrix (Transformed Data)',
+                height=600,
+                margin=dict(l=100, r=50, t=50, b=100),
+                plot_bgcolor=COLORS['bg_transparent'],
+                paper_bgcolor=COLORS['bg_transparent'],
+                font=dict(color=COLORS['text_primary'], size=12),
+                xaxis=dict(tickangle=-45, side='bottom', tickfont=dict(size=11), automargin=True),
+                yaxis=dict(tickfont=dict(size=11), automargin=True)
+            )
+            fig_corr = apply_fig_theme(fig_corr, height=600)
+            write_html(fig_corr, 'data_correlation_matrix.html')
+except Exception as e:
+    print(f"Data tab precompute error: {e}")
+
+# --- Data Tab: Per-column cached visuals and metrics ---
+try:
+    if raw_df is not None:
+        df = raw_df.copy()
+        df = df[df['budget'] > 0].copy()
+        df['log_budget'] = np.log1p(df['budget']) if 'budget' in df.columns else None
+        df['log_revenue'] = np.log1p(df['revenue']) if 'revenue' in df.columns else None
+        df['log_vote_count'] = np.log1p(df['vote_count']) if 'vote_count' in df.columns else None
+        df['log_user_rating_count'] = np.log1p(df['user_rating_count']) if 'user_rating_count' in df.columns else None
+        df['log_keyword_count'] = np.log1p(df['keyword_count']) if 'keyword_count' in df.columns else None
+        if 'genres' in df.columns:
+            df['primary_genre'] = df['genres'].astype(str).str.split('|').str[0]
+        if 'release_year' in df.columns:
+            df['year_group'] = pd.cut(
+                df['release_year'],
+                bins=[0, 1919, 1949, 1979, 1999, 2009, 2019],
+                labels=['Pre-1920', '1920-1949', '1950-1979', '1980-1999', '2000-2009', '2010-2019']
+            )
+        if 'original_language' in df.columns:
+            df['language_group'] = df['original_language'].apply(
+                lambda x: x if x in ['en','fr','ru','hi','es','de','ja','it'] else 'Other'
+            )
+        if 'lead_actor' in df.columns:
+            counts = df.groupby('lead_actor').size().reset_index(name='movie_count')
+            counts['popularity_group'] = pd.cut(
+                counts['movie_count'],
+                bins=[0, 1, 5, float('inf')],
+                labels=['Low Popularity', 'Medium Popularity', 'High Popularity']
+            )
+            df = df.merge(counts[['lead_actor','popularity_group']], on='lead_actor', how='left')
+
+        transformed_cols = [
+            c for c in [
+                'vote_average',
+                'log_budget','log_revenue','log_vote_count','log_user_rating_count','log_keyword_count','runtime',
+                'primary_genre','year_group','language_group','popularity_group'
+            ] if c in df.columns
+        ]
+        df_t = df[transformed_cols].dropna().copy()
+
+        manifest = []
+
+        def truncate_label(s: str, n: int = 24) -> str:
+            s = str(s)
+            return s if len(s) <= n else s[: n-1] + '…'
+
+        for col in transformed_cols:
+            series = df_t[col]
+            is_numeric = pd.api.types.is_numeric_dtype(series)
+            fig = None
+            if is_numeric:
+                fig = px.histogram(df_t, x=col, marginal="box", opacity=0.9, color_discrete_sequence=[COLORS['graph_bg']])
+                fig.update_layout(title_text=f"Distribution: {col}", showlegend=False)
+                fig = apply_fig_theme(fig, height=420)
+                metrics = {
+                    'Metric': ['Count','Missing %','Mean','Std','Min','Median','Max','Skew','Kurtosis'],
+                    'Value': [
+                        int(series.count()),
+                        float(series.isna().mean() * 100),
+                        float(series.mean()),
+                        float(series.std()),
+                        float(series.min()),
+                        float(series.median()),
+                        float(series.max()),
+                        float(series.skew() if series.count() > 0 else 0.0),
+                        float(series.kurtosis() if series.count() > 0 else 0.0),
+                    ]
+                }
+            else:
+                vc = series.astype(str).value_counts().head(15)
+                x_labels = [truncate_label(lbl) for lbl in list(vc.index)]
+                fig = px.bar(x=x_labels, y=vc.values, text_auto=True, opacity=0.95, color_discrete_sequence=[COLORS['graph_bg']])
+                fig.update_traces(textposition='inside', insidetextanchor='end', textfont=dict(size=12))
+                fig.update_layout(title_text=f"Top 15: {col}", xaxis_title=col, yaxis_title='Count', showlegend=False)
+                fig = apply_fig_theme(fig, height=420)
+                top_label = vc.index[0] if len(vc) else '—'
+                top_count = int(vc.iloc[0]) if len(vc) else 0
+                metrics = {
+                    'Metric': ['Count','Missing %','Unique','Top','Top Freq'],
+                    'Value': [int(series.shape[0]), float(series.isna().mean() * 100), int(series.astype(str).nunique()), str(top_label), int(top_count)]
+                }
+
+            # Write plot
+            plot_filename = f"data_col_{col}.html".replace(' ', '_')
+            write_html(fig, plot_filename)
+
+            # Write metrics table
+            metrics_df = pd.DataFrame(metrics)
+            metrics_filename = f"data_metrics_{col}.html".replace(' ', '_')
+            write_simple_table_html(metrics_df, metrics_filename, title=f"Metrics: {col}")
+
+            manifest.append({
+                'column': col,
+                'plot': plot_filename,
+                'metrics': metrics_filename,
+                'type': 'numeric' if is_numeric else 'categorical'
+            })
+
+        # Save manifest JSON for dashboard to read
+        (OUTPUT_DIR / 'data_columns.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
+        print(f"Wrote {(OUTPUT_DIR / 'data_columns.json')}")
+except Exception as e:
+    print(f"Per-column data visuals error: {e}")

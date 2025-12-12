@@ -260,6 +260,32 @@ app.layout = html.Div([
                                     ], className="card h-100", style={"backgroundColor": COLORS['card_background_color'], "boxShadow": "none"})
                                 ], className="col-12 col-xl-6 mb-3"),
                             ], className="row g-3")
+                        ,
+                        html.Div([
+                            html.Div([
+                                html.Div([
+                                    html.Div(
+                                        "K-Means Interpretation",
+                                        className="card-header fw-semibold"
+                                    ),
+                                    html.Div([
+                                        html.P(
+                                            "K-Means reveals natural groupings of movies in PCA space driven by engagement, financial scale, and runtime. The selected k balances cluster compactness (inertia) and separation (silhouette).",
+                                            className="mb-3"
+                                        ),
+                                        html.Div([
+                                            html.Strong("Highlights:"),
+                                            html.Ul([
+                                                html.Li("Silhouette peaks around the chosen k indicating good separation"),
+                                                html.Li("Elbow in inertia curve suggests diminishing returns beyond chosen k"),
+                                                html.Li("Cluster profiles differentiate engagement-heavy vs. budget-heavy archetypes"),
+                                                html.Li("Outcome distributions vary by cluster, supporting downstream segmentation"),
+                                            ])
+                                        ])
+                                    ], className="card-body")
+                                ], className="card")
+                            ], className="col-12")
+                        ], className="row mb-4")
                         ]),
                         dcc.Tab(label='PCA', value='pca', children=[
                             html.Div([
