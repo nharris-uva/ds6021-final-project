@@ -6,6 +6,11 @@ running heavy model computations.
 """
 import dash
 from dash import dcc, html
+from dash import dash_table
+import pandas as pd
+import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
 from pathlib import Path
 
 # Colors and style constants (matching simple_style_dashboard.py)
@@ -41,6 +46,258 @@ def graph_iframe(filename: str, height: int = 380):
     path = GRAPH_DIR / filename
     src_doc = path.read_text(encoding='utf-8') if path.exists() else f"<html><body><p style='color:red'>Missing {filename}</p></body></html>"
     return html.Iframe(srcDoc=src_doc, style={"width": "100%", "height": f"{height}px", "border": "0"})
+
+
+# ===== Data Tab helpers (mirroring simple_style_dashboard) =====
+
+# Load dataset and create lightweight transformed view (log features)
+RAW_DATA_PATH = ROOT / "New Data and Work" / "final_movie_table.csv"
+try:
+    raw_data = pd.read_csv(RAW_DATA_PATH)
+except Exception:
+    raw_data = pd.DataFrame()
+
+def build_transformed_data(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty or 'budget' not in df.columns:
+        return df.copy()
+    df_nz = df[df['budget'] > 0].copy()
+    # Safe log transforms
+    for col, new_col in [
+        ('budget', 'log_budget'),
+        ('revenue', 'log_revenue'),
+        ('vote_count', 'log_vote_count'),
+        ('user_rating_count', 'log_user_rating_count'),
+        ('keyword_count', 'log_keyword_count'),
+    ]:
+        if col in df_nz.columns:
+            df_nz[new_col] = np.log1p(df_nz[col].astype(float).fillna(0))
+    return df_nz
+
+transformed_data = build_transformed_data(raw_data)
+
+def truncate_label(label, max_len=24):
+    s = str(label)
+    return s if len(s) <= max_len else s[: max_len - 1] + "…"
+
+def get_column_type(df, col):
+    return 'numeric' if pd.api.types.is_numeric_dtype(df[col]) else 'categorical'
+
+def apply_fig_theme(fig, *, height=None):
+    layout_updates = {
+        'margin': dict(l=20, r=20, t=40, b=40),
+        'plot_bgcolor': COLORS['bg_transparent'],
+        'paper_bgcolor': COLORS['bg_transparent'],
+        'font': dict(color=COLORS['text_primary'])
+    }
+    if height is not None:
+        layout_updates['height'] = height
+    fig.update_layout(**layout_updates)
+    return fig
+
+def create_numeric_graph(df, col):
+    fig = px.histogram(df, x=col, marginal="box", opacity=0.9, color_discrete_sequence=[COLORS['graph_bg']])
+    fig.update_layout(title_text=None, showlegend=False,
+                      xaxis=dict(title_font=dict(color=COLORS['text_primary'], size=16), tickfont=dict(color=COLORS['text_primary'], size=12)),
+                      yaxis=dict(title_font=dict(color=COLORS['text_primary'], size=16), tickfont=dict(color=COLORS['text_primary'], size=12)))
+    return apply_fig_theme(fig, height=420)
+
+def create_categorical_graph(df, col):
+    value_counts = df[col].astype(str).value_counts().head(15)
+    original_labels = list(value_counts.index)
+    x_labels = [truncate_label(lbl, max_len=24) for lbl in original_labels]
+    fig = px.bar(x=x_labels, y=value_counts.values, text_auto=True, opacity=0.95, color_discrete_sequence=[COLORS['graph_bg']])
+    fig.update_traces(textposition='inside', insidetextanchor='end', textfont=dict(size=12, color=COLORS['text_light']))
+    fig.update_traces(hovertext=original_labels, hovertemplate="%{hovertext}: %{y}<extra></extra>")
+    fig.update_layout(title_text=None, xaxis_title=col, yaxis_title='Count', showlegend=False,
+                      xaxis=dict(title_font=dict(color=COLORS['text_primary'], size=16), tickfont=dict(color=COLORS['text_primary'], size=12)),
+                      yaxis=dict(title_font=dict(color=COLORS['text_primary'], size=16), tickfont=dict(color=COLORS['text_primary'], size=12)))
+    fig.update_xaxes(tickangle=-30)
+    return apply_fig_theme(fig, height=420)
+
+def create_correlation_matrix(df):
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    if not numeric_cols:
+        return go.Figure()
+    corr_matrix = df[numeric_cols].corr()
+    fig = go.Figure(data=go.Heatmap(
+        z=corr_matrix.values,
+        x=corr_matrix.columns,
+        y=corr_matrix.columns,
+        colorscale='RdBu', zmid=0, zmin=-1, zmax=1,
+        text=np.round(corr_matrix.values, 2), texttemplate='%{text}', textfont={"size": 10},
+        colorbar=dict(title="Correlation", tickmode="linear", tick0=-1, dtick=0.5)
+    ))
+    fig.update_layout(title=None, height=600, margin=dict(l=100, r=50, t=50, b=100),
+                      plot_bgcolor=COLORS['bg_transparent'], paper_bgcolor=COLORS['bg_transparent'],
+                      font=dict(color=COLORS['text_primary'], size=12),
+                      xaxis=dict(tickangle=-45, side='bottom', tickfont=dict(size=11), automargin=True),
+                      yaxis=dict(tickfont=dict(size=11), automargin=True))
+    return fig
+
+def build_column_detail(selected_col: str):
+    if selected_col not in transformed_data.columns:
+        return html.Div([
+            html.Div([
+                html.Div(f"Column '{selected_col}' is not available in transformed data", className="card-header fw-semibold", style={"backgroundColor": COLORS['card_background_color']}),
+                html.Div([html.P("Please select another column.")], className="card-body")
+            ], className="card")
+        ])
+    col_type = get_column_type(transformed_data, selected_col)
+    if col_type == 'numeric':
+        dist_fig = create_numeric_graph(transformed_data, selected_col)
+        series = transformed_data[selected_col]
+        metrics = {
+            'Count': int(series.count()),
+            'Missing %': float(series.isna().mean() * 100),
+            'Mean': float(series.mean()),
+            'Std': float(series.std()),
+            'Min': float(series.min()),
+            'Median': float(series.median()),
+            'Max': float(series.max()),
+            'Skew': float(series.skew() if series.count() > 0 else 0.0),
+            'Kurtosis': float(series.kurtosis() if series.count() > 0 else 0.0),
+        }
+    else:
+        dist_fig = create_categorical_graph(transformed_data, selected_col)
+        series = transformed_data[selected_col].astype(str)
+        vc = series.value_counts()
+        top_label = vc.index[0] if len(vc) else '—'
+        top_count = int(vc.iloc[0]) if len(vc) else 0
+        metrics = {
+            'Count': int(series.shape[0]),
+            'Missing %': float(transformed_data[selected_col].isna().mean() * 100),
+            'Unique': int(series.nunique()),
+            'Top': str(top_label),
+            'Top Freq': int(top_count),
+        }
+
+    return html.Div([
+        html.Div([
+            html.Div([
+                html.Div(f"Distribution: {selected_col}", className="card-header fw-semibold"),
+                html.Div([dcc.Graph(figure=dist_fig, config={'displayModeBar': False})], className="card-body p-2")
+            ], className="card h-100")
+        ], className="col-12 col-lg-8 mb-3"),
+        html.Div([
+            html.Div([
+                html.Div("Metrics", className="card-header fw-semibold"),
+                html.Div([
+                    dash_table.DataTable(
+                        columns=[{"name": "Metric", "id": "Metric"}, {"name": "Value", "id": "Value"}],
+                        data=[{"Metric": k, "Value": (f"{v:.3f}" if isinstance(v, float) else v)} for k, v in metrics.items()],
+                        style_header={
+                            'backgroundColor': COLORS['header'],
+                            'color': COLORS['text_light'],
+                            'fontWeight': 'bold',
+                            'fontFamily': 'Inter, system-ui',
+                            'fontSize': '14px',
+                            'textAlign': 'center',
+                            'border': '1px solid #ddd'
+                        },
+                        style_cell={
+                            'textAlign': 'left',
+                            'padding': '8px',
+                            'fontFamily': 'Inter, system-ui',
+                            'fontSize': '13px',
+                            'border': '1px solid #ddd',
+                            'minWidth': '100px'
+                        },
+                        style_data={
+                            'backgroundColor': COLORS['bg_main'],
+                            'color': COLORS['text_primary']
+                        },
+                        style_data_conditional=[
+                            {
+                                'if': {'row_index': 'odd'},
+                                'backgroundColor': COLORS['card_background_color']
+                            }
+                        ],
+                        page_size=10
+                    )
+                ], className="card-body p-2")
+            ], className="card h-100")
+        ], className="col-12 col-lg-4 mb-3"),
+    ], className="row g-3 align-items-stretch mb-3")
+
+def build_data_tab_content():
+    columns = [col for col in transformed_data.columns]
+    return html.Div([
+        html.H3("Data", className="text-center mb-4", style={'fontFamily': 'Inter, system-ui', 'color': COLORS['header']}),
+        html.Div([
+            html.Div([
+                html.Label("Select a Column:", htmlFor="column-selector", style={'fontWeight': 'bold', 'marginRight': '10px', 'fontSize': '16px'}),
+                dcc.Dropdown(id='column-selector', options=[{'label': col, 'value': col} for col in columns], value=columns[0] if columns else None, style={'width': '300px', 'fontFamily': 'Inter, system-ui'})
+            ], style={'display': 'flex', 'alignItems': 'center', 'gap': '10px', 'marginBottom': '10px'})
+        ], className="row mb-2"),
+        html.Div(id='column-visualization', children=[]),
+        html.Div([
+            html.Div([
+                html.Div([
+                    html.Div("Post-Processed Dataset (Used for Modeling)", className="card-header fw-semibold"),
+                    html.Div([
+                        dash_table.DataTable(
+                            id='transformed-data-table',
+                            columns=[{"name": col, "id": col} for col in transformed_data.columns],
+                            data=transformed_data.to_dict('records'),
+                            page_size=10,
+                            style_table={
+                                'overflowX': 'auto',
+                                'overflowY': 'auto',
+                                'maxHeight': '500px'
+                            },
+                            style_header={
+                                'backgroundColor': COLORS['header'],
+                                'color': COLORS['text_light'],
+                                'fontWeight': 'bold',
+                                'fontFamily': 'Inter, system-ui',
+                                'fontSize': '14px',
+                                'textAlign': 'center',
+                                'border': '1px solid #ddd'
+                            },
+                            style_cell={
+                                'textAlign': 'left',
+                                'padding': '10px',
+                                'fontFamily': 'Inter, system-ui',
+                                'fontSize': '13px',
+                                'border': '1px solid #ddd',
+                                'minWidth': '100px',
+                                'maxWidth': '300px',
+                                'whiteSpace': 'normal'
+                            },
+                            style_data={
+                                'backgroundColor': COLORS['bg_main'],
+                                'color': COLORS['text_primary']
+                            },
+                            style_data_conditional=[
+                                {
+                                    'if': {'row_index': 'odd'},
+                                    'backgroundColor': COLORS['card_background_color']
+                                }
+                            ],
+                            fixed_rows={'headers': True},
+                            sort_action='native',
+                            filter_action='native'
+                        )
+                    ], className="card-body p-3")
+                ], className="card")
+            ], className="col-12")
+        ], className="row mt-4 mb-4"),
+        html.Div([
+            html.Div([
+                html.Div([
+                    html.Div("Correlation Matrix (Transformed Data)", className="card-header fw-semibold"),
+                    html.Div([dcc.Graph(id='correlation-matrix', figure=create_correlation_matrix(transformed_data), config={'displayModeBar': True})], className="card-body p-3")
+                ], className="card")
+            ], className="col-12")
+        ], className="row mt-4 mb-4")
+    ])
+
+_DATA_TAB_CACHE = None
+def get_data_tab_content():
+    global _DATA_TAB_CACHE
+    if _DATA_TAB_CACHE is None:
+        _DATA_TAB_CACHE = build_data_tab_content()
+    return _DATA_TAB_CACHE
 
 
 # Layout mirroring structure of simple_style_dashboard.py but using iframes
@@ -414,17 +671,8 @@ app.layout = html.Div([
             ], className="row mb-4"),
         ], style={'display': 'none'}),
 
-        # Data content placeholder
-        html.Div(id='data-content', children=[
-            html.Div([
-                html.Div([
-                    html.Div("Data Tab (Cached)", className="card-header fw-semibold"),
-                    html.Div([
-                        html.P("This lightweight dashboard focuses on model visuals. Data tab can be added with cached plots if needed.")
-                    ], className="card-body")
-                ], className="card")
-            ], className="row mb-4")
-        ], style={'display': 'none'})
+        # Data content (lazy loaded)
+        html.Div(id='data-content', children=[], style={'display': 'none'})
     ], className="tab-content-container"),
 ], id='app-container', className="container-fluid py-4 px-3", style={'background': COLORS['bg_main'], 'minHeight': '100vh', 'fontFamily': 'Inter, system-ui'})
 
@@ -441,6 +689,26 @@ def switch_tabs(tab):
     if tab == 'models-tab':
         return ({'display': 'none'}, {'display': 'block'}, {'display': 'none'})
     return ({'display': 'none'}, {'display': 'none'}, {'display': 'block'})
+
+# Callbacks to lazy-load data tab and update column visualizations
+@app.callback(
+    Output('data-content', 'children'),
+    Input('main-tabs', 'value'),
+    prevent_initial_call=False
+)
+def load_data_tab(active_tab):
+    if active_tab == 'data-tab':
+        return get_data_tab_content()
+    return dash.no_update
+
+@app.callback(
+    Output('column-visualization', 'children'),
+    Input('column-selector', 'value'),
+)
+def update_column_visualization(selected_column):
+    if selected_column is None:
+        return html.Div("Please select a column", style={'textAlign': 'center', 'padding': '20px'})
+    return build_column_detail(selected_column)
 
 # Inject the same custom CSS for tabs as the original
 app.index_string = '''
