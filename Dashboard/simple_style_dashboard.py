@@ -16,9 +16,10 @@ from sklearn.inspection import permutation_importance
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.neural_network import MLPRegressor
-import json
 import joblib
 from pathlib import Path
+
+MODEL_CACHE_DIR = Path(__file__).resolve().parents[1] / "data" / "model_cache"
 
 COLORS = {
     'graph_bg': '#D9376E',
@@ -104,6 +105,17 @@ def load_and_preprocess_data_models():
     ]
     df_num_local = df_nz[numeric_vars].dropna()
     return df_num_local, df_nz
+
+
+def _load_cached_joblib(filename):
+    cache_path = MODEL_CACHE_DIR / filename
+    if not cache_path.exists():
+        return None
+    try:
+        return joblib.load(cache_path)
+    except Exception as exc:  # pragma: no cover - defensive
+        print(f"Failed to load cached artifact {cache_path}: {exc}")
+        return None
 
 def prepare_categorical_data(df_nz):
     df_model = df_nz.copy()
@@ -355,6 +367,32 @@ model_cache = {
     'mlp_payload': None,
     'kmeans_pca_payload': None
 }
+
+
+def hydrate_model_cache_from_disk():
+    knn_payload = _load_cached_joblib('knn.joblib')
+    if knn_payload is not None:
+        model_cache['knn_payload'] = knn_payload
+        model_cache['knn_rmse'] = knn_payload.get('valid_rmse')
+        model_cache['knn_fitted'] = True
+
+    kmeans_payload = _load_cached_joblib('kmeans_pca.joblib')
+    if kmeans_payload is not None:
+        model_cache['kmeans_pca_payload'] = kmeans_payload
+        model_cache['kmeans_fitted'] = True
+
+    mlp_payload = _load_cached_joblib('mlp.joblib')
+    if mlp_payload is not None:
+        model_cache['mlp_payload'] = mlp_payload
+        model_cache['mlp_train_rmse'] = mlp_payload.get('train_rmse')
+        model_cache['mlp_valid_rmse'] = mlp_payload.get('valid_rmse')
+        model_cache['mlp_fitted'] = True
+
+    if model_cache['knn_fitted'] and model_cache['mlp_fitted']:
+        model_cache['fitted'] = True
+
+
+hydrate_model_cache_from_disk()
 
 def build_comparison_section(knn_rmse=None, mlp_train_rmse=None, mlp_valid_rmse=None):
     X = df_num_models.drop(columns=['vote_average'])
@@ -1047,18 +1085,6 @@ def create_categorical_graph(df, col, title_prefix=""):
     fig.update_xaxes(tickangle=-30)
     return apply_fig_theme(fig, height=420)
 
-def create_text_placeholder(col):
-    """Create placeholder for text columns that can't be visualized"""
-    fig = go.Figure()
-    fig.add_annotation(
-        text=f"Column '{col}' has too many unique values to visualize",
-        xref="paper", yref="paper",
-        x=0.5, y=0.5, showarrow=False,
-        font=dict(size=14, family="Inter, system-ui", color=COLORS['text_primary'])
-    )
-    fig.update_layout(xaxis=dict(visible=False), yaxis=dict(visible=False), font=dict(color=COLORS['text_primary'], size=14))
-    return apply_fig_theme(fig, height=420)
-
 def create_missingness_bar(col: str):
     """Create a stacked bar chart showing % missing vs present in transformed data."""
     trans_pct_missing = float(transformed_data[col].isna().mean() * 100)
@@ -1095,91 +1121,6 @@ def create_missingness_bar(col: str):
         yaxis=dict(title="Percentage %", range=[0, 100], tick0=0, dtick=20, tickfont=dict(size=11), automargin=True),
     )
     return apply_fig_theme(fig, height=140)
-
-def build_column_row(original_col: str, transformed_col: str):
-    """Build a single row comparing original vs transformed features used in models"""
-    # Determine types for appropriate visuals
-    orig_type = get_column_type(original_data, original_col) if original_col in original_data.columns else 'categorical'
-    trans_type = get_column_type(transformed_data, transformed_col) if transformed_col in transformed_data.columns else 'categorical'
-
-    # Create appropriate visualizations based on column type
-    left_graph = create_numeric_graph(original_data, original_col) if orig_type == 'numeric' else create_categorical_graph(original_data, original_col)
-    right_graph = create_numeric_graph(transformed_data, transformed_col) if trans_type == 'numeric' else create_categorical_graph(transformed_data, transformed_col)
-
-    # Notes keyed by original → transformed pair
-    notes = TRANSFORMATION_NOTES.get(
-        original_col,
-        f"No transformation notes yet for **{original_col} → {transformed_col}**.\n\nAdd your transformation explanation here."
-    )
-
-    row = html.Div([
-        # Left card - Original data
-        html.Div([
-            html.Div([
-                html.Div(
-                    f"Original: {original_col}",
-                    className="card-header fw-semibold"
-                ),
-                html.Div(
-                    dcc.Graph(
-                        figure=left_graph,
-                        config={'displayModeBar': False}
-                    ),
-                    className="card-body p-2"
-                )
-            ], className="card h-100")
-        ], className="col-12 col-lg-4 mb-3"),
-        
-        # Middle card - Transformation notes + missingness
-        html.Div([
-            html.Div([
-                html.Div(
-                    f"Transformation: {original_col} → {transformed_col}",
-                    className="card-header fw-semibold"
-                ),
-                html.Div([
-                    html.Div([
-                        dcc.Graph(
-                            figure=create_missingness_bar(transformed_col),
-                            config={'displayModeBar': False},
-                            style={"height": "140px"}
-                        )
-                    ], className="mb-2"),
-                    html.Div(
-                        dcc.Markdown(
-                            children=notes,
-                            className="small"
-                        ),
-                        style={
-                            "maxHeight": "260px",
-                            "overflowY": "auto",
-                            "whiteSpace": "pre-wrap",
-                            "fontSize": "14px"
-                        }
-                    )
-                ], className="card-body")
-            ], className="card h-100")
-        ], className="col-12 col-lg-4 mb-3"),
-        
-        # Right card - Transformed data
-        html.Div([
-            html.Div([
-                html.Div(
-                    f"Transformed: {transformed_col}",
-                    className="card-header fw-semibold"
-                ),
-                html.Div(
-                    dcc.Graph(
-                        figure=right_graph,
-                        config={'displayModeBar': False}
-                    ),
-                    className="card-body p-2"
-                )
-            ], className="card h-100")
-        ], className="col-12 col-lg-4 mb-3")
-    ], className="row g-3 align-items-stretch mb-3")
-    
-    return row
 
 def build_column_detail(selected_col: str):
     """Build per-column detail panel using transformed (model-used) data only.
@@ -1341,10 +1282,6 @@ def create_correlation_matrix(df):
     )
     
     return fig
-
-def build_dashboard_layout():
-    """Deprecated: previously built comparison rows. No longer used."""
-    return []
 
 def build_data_tab_content():
     """Build Data tab to focus on post-processed (model-used) data only.
@@ -1784,7 +1721,6 @@ app.layout = html.Div([
 })
 
 # Route to allow dataset download from the app server
-import os
 from flask import send_file
 @app.server.route('/download/final_movie_table')
 def download_final_movie_table():
@@ -1804,27 +1740,6 @@ def toggle_tab_visibility(active_tab):
     models_style = {'display': 'block'} if active_tab == 'models-tab' else {'display': 'none'}
     data_style = {'display': 'block'} if active_tab == 'data-tab' else {'display': 'none'}
     return summary_style, models_style, data_style
-
-# Hero buttons: switch main tabs when clicked
-@app.callback(
-    Output('main-tabs', 'value'),
-    [Input('hero-summary-btn', 'n_clicks'),
-     Input('hero-models-btn', 'n_clicks'),
-     Input('hero-data-btn', 'n_clicks')],
-    prevent_initial_call=True
-)
-def hero_buttons_nav(summary_clicks, models_clicks, data_clicks):
-    ctx = dash.callback_context
-    if not ctx.triggered:
-        return no_update
-    trigger = ctx.triggered[0]['prop_id']
-    if 'hero-summary-btn' in trigger:
-        return 'summary-tab'
-    if 'hero-models-btn' in trigger:
-        return 'models-tab'
-    if 'hero-data-btn' in trigger:
-        return 'data-tab'
-    return no_update
 
 @app.callback(
     Output('data-content', 'children'),
@@ -1907,6 +1822,17 @@ def update_knn_section(active_tab):
         ) = fit_knn_model(df_num_models, fast=False)
         model_cache['knn_rmse'] = knn_rmse
         model_cache['knn_fitted'] = True
+        model_cache['knn_payload'] = {
+            'importance': knn_importance.to_dict(orient='list'),
+            'valid_rmse': knn_rmse,
+            'k_values': k_values,
+            'rmse_curve': rmse_curve,
+            'rmse_curve_tuned': rmse_curve_tuned,
+            'correlation': corr_df.to_dict(orient='list'),
+            'best_params': best_params
+        }
+        if model_cache['mlp_fitted']:
+            model_cache['fitted'] = True
         html_content = build_knn_section(knn_importance, knn_rmse, k_values, rmse_curve, rmse_curve_tuned, corr_df, best_params)
         model_cache['knn_html'] = html_content
         return html_content
@@ -1934,6 +1860,15 @@ def update_kmeans_section(active_tab):
         kmeans_model, X_scaled_km, df_clusters, k_values, inertia_list, silhouette_list, cluster_profiles = fit_kmeans_model(df_num_models)
         pca_model, X_pca, pca_clusters, pca_summary = fit_pca_model(df_num_models, X_scaled_km)
         model_cache['kmeans_fitted'] = True
+        model_cache['kmeans_pca_payload'] = {
+            'k_values': k_values,
+            'inertia_list': inertia_list,
+            'silhouette_list': silhouette_list,
+            'cluster_profiles': cluster_profiles,
+            'df_clusters_small': df_clusters[['cluster', 'vote_average']],
+            'X_pca': X_pca,
+            'pca_clusters': pca_clusters
+        }
         html_content = build_clustering_section(X_pca, pca_clusters, k_values, silhouette_list, df_clusters, inertia_list, cluster_profiles)
         model_cache['kmeans_html'] = html_content
         return html_content
@@ -1973,6 +1908,12 @@ def update_mlp_section(active_tab):
         model_cache['mlp_train_rmse'] = mlp_train_rmse
         model_cache['mlp_valid_rmse'] = mlp_valid_rmse
         model_cache['mlp_fitted'] = True
+        model_cache['mlp_payload'] = {
+            'train_rmse': mlp_train_rmse,
+            'valid_rmse': mlp_valid_rmse,
+            'importance': mlp_importance.to_dict(orient='list'),
+            'loss_curve': loss_curve
+        }
         if model_cache['knn_fitted'] and model_cache['mlp_fitted']:
             model_cache['fitted'] = True
         html_content = build_mlp_section(mlp_importance, mlp_train_rmse, mlp_valid_rmse, loss_curve)

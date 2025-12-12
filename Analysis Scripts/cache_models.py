@@ -19,8 +19,8 @@ DATA_PATH = ROOT / 'New Data and Work' / 'final_movie_table.csv'
 CACHE_DIR = ROOT / 'data' / 'model_cache'
 
 
-def load_df(num_rows=1000):
-    df = pd.read_csv(DATA_PATH).head(num_rows)
+def load_df(num_rows):
+    df = pd.read_csv(DATA_PATH)
     df_nz = df[df['budget'] > 0].copy()
     df_nz['log_budget'] = np.log1p(df_nz['budget'])
     df_nz['log_revenue'] = np.log1p(df_nz['revenue'])
