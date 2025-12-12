@@ -355,7 +355,7 @@ app.layout = html.Div([
                             html.Li("Sabine Segaloff"),
                             html.Li("Tianyin Mao"),
                             html.Li("Mason Earp"),
-                            html.Li("Nick Thornton"),
+                            html.Li("Nicholas Thornton"),
                             html.Li("Nate Harris"),
                         ], className="mb-0", style={'fontFamily': 'Inter, system-ui'})
                     ], className="card-body")
@@ -628,10 +628,10 @@ app.layout = html.Div([
                 html.Div([
                     html.Div([
                         html.Div("Model Performance Comparison", className="card-header fw-semibold"),
-                        html.Div([graph_iframe('comparison_table.html', height=420)], className="card-body p-3")
+                        html.Div([graph_iframe('comparison_table.html', height=250)], className="card-body p-2")
                     ], className="card")
                 ], className="col-12")
-            ], className="row mb-4"),
+            ], className="row mb-2"),
 
             # Copied "Key Conclusions" markdown from simple_style_dashboard.py
             html.Div([
