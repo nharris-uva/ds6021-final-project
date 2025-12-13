@@ -11,6 +11,8 @@ Mason Earp, Nate Harris, Tianyin Mao, Sabine Segaloff, Nicholas Thornton
 
 Data: Kaggle
 
+Published Dashboard: https://good-lord-please-1-e2d572cfc247.herokuapp.com/
+
 In this project, we focused on movie data from Kaggle to answer the question: What factors lead to movie success, where success is defined by the average vote rating?
 
 The jupyter notebook file, EDA.ipynb, contains the exploratory data analysis and predictive modeling (and machine learning) that we performed to gain our insights.
